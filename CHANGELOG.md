@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Sandbox gateway security fixes in the image (2026-10-31)
+
+- `components.json` pins studio `0609fbb` (before `c4b3708`) and server `df993bc` (before `e4791a8`). The image
+  therefore contains runtime `8597544`, whose sandbox gateway parses request heads strictly (request smuggling fix,
+  runtime PR #33) and refuses sandboxes and builds when the Docker daemon cannot enforce memory, CPU and process
+  limits (runtime PR #37; for example rootless Docker without cgroup v2 delegation).
+
 ### Windows launcher update and rollback, rootless Docker (2026-10-31)
 
 - `nodestro.ps1` gained `update` and `rollback`, like `./nodestro`. Before switching, it makes a backup and a copy of the
