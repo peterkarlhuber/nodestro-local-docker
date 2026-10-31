@@ -1,6 +1,6 @@
 # Nodestro Local Docker launcher for Windows (PowerShell 5.1 or 7) with Docker Desktop. Linux and macOS: ./nodestro
 #
-#   .\nodestro.ps1 start | stop | restart | status | open | link | logs | backup [FILE] | restore FILE
+#   .\nodestro.ps1 start | stop | restart | status | open | link | logout | logs | backup [FILE] | restore FILE
 #                  update | rollback | build | rotate-key | uninstall [--delete-data] | help
 #
 # No param block: arguments such as --delete-data reach the script as they are typed.
@@ -84,7 +84,7 @@ function Open-Browser {
 function Start-Nodestro {
     Require-Docker; Load-State
     if (-not (Test-Native { docker image inspect $env:NODESTRO_IMAGE })) { Write-Host "Building the Nodestro image from source (several minutes, once)..."; Build-Image }
-    Write-Host "Starting Nodestro (image $($env:NODESTRO_IMAGE), http://127.0.0.1:$($env:NODESTRO_PORT))..."
+    Write-Host "Starting Nodestro (image $($env:NODESTRO_IMAGE), port $($env:NODESTRO_PORT) on 127.0.0.1)..."
     try { Invoke-Compose up -d --wait --wait-timeout 300 }
     catch { Invoke-Compose logs --tail 40; Fail "Nodestro did not start. The lines above say why (a port in use: set NODESTRO_PORT)." }
     Open-Browser
@@ -185,6 +185,7 @@ switch ($Command) {
     }
     "open" { Require-Docker; Load-State; Open-Browser }
     "link" { Require-Docker; Load-State; Get-Link }
+    "logout" { Require-Docker; Load-State; Invoke-Compose exec -T nodestro nodestro-local logout }
     "logs" { Require-Docker; Load-State; Invoke-Compose logs --tail 200 }
     "backup" {
         Require-Docker; Load-State

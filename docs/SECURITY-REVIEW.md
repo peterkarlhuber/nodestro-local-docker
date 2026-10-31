@@ -288,3 +288,23 @@ daemon is green. Assumptions S1, S2 (for the tested classes), S5, S8, S10 and S1
 S3, S4, S7 and S9 are partly supported. S6 is not verifiable this way. The most important open items are K9 (fixed
 by PR #37), D1 (cookie scope), K1 and K2 (resource exhaustion by A2), and the untested Docker Desktop and rootless
 platforms. **The independent review stays open.**
+
+### 9.6 Follow-up fixes (2026-10-31, after the cross-check)
+
+These close findings of sections 9.2 and 9.3 in code. They come from the same internal work and are **not** an
+independent review; the independent review is still open, and this section must be checked by it as well.
+
+| Finding | Fix | Where | Tests |
+| --- | --- | --- | --- |
+| K1 | A build is refused with 507 once 32 `nodestro-env:*` images or 20 GB of them exist (rebuilding an existing tag is allowed). | runtime PR #47 | `test_sandbox_gateway.py` image limit tests |
+| K2 | At most 32 connections (503); head within 10 s and body within 120 s (408); a second build is refused with 429 before its body is read; only uncompressed tar contexts, at most 2000 entries, unpacked size at most the archive size (413). | runtime PR #47 | slow head, connection limit, second build, compressed and oversized contexts |
+| D2 | Containers and builds are refused with 503 unless `/info` reports `name=seccomp` and no `profile=unconfined`. | runtime PR #47 | three daemons without usable seccomp; real-daemon tests |
+| D4 | `ca.pem` must be PEM `CERTIFICATE` blocks only and load into `ssl`. | runtime PR #47 | six invalid bundles, one commented bundle |
+| K4 (base image) | Sandbox bases `python:3.10`-`3.14-slim` and the Nodestro image's Python and Node bases are pinned by index digest; the gateway builds only on a pinned base. | runtime PR #47, server PR #7 | Dockerfile tests; server CI check |
+| D1 | Browser sessions only under the installation's random `nodestro-<random>.localhost` name, 8 h idle and 24 h maximum lifetime, logout, `Referrer-Policy: no-referrer`. Design: [SESSIONS.md](SESSIONS.md). | api PR #29, this repository | api `test_local_container.py`; e2e session, port and logout tests |
+| D3 | Only the published port and the container's port 8080 are answered in `Host`. | api PR #29 | api port tests; e2e `test_only_the_published_port_is_answered` |
+
+Still open: the independent review, Docker Desktop on Windows and macOS (untested), Safari with `*.localhost`
+names (untested), the build network of tool environments (K4, accepted), and the residual risks in
+[SECURITY.md](SECURITY.md).
+

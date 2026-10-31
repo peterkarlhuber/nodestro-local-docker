@@ -67,7 +67,7 @@ The `local-container` profile (nodestro-runtime `profile.py`) is therefore a sin
 ## Components
 
 ```
-host browser ──http://127.0.0.1:8765──▶ [ nodestro ]  studio + API + runtime, SQLite in volume `data`
+host browser ──http://nodestro-<random>.localhost:8765──▶ [ nodestro ]  studio + API + runtime, SQLite in volume `data`
                                             │ DOCKER_HOST=unix:///run/nodestro-sandbox/docker.sock
                                             ▼  (volume `sandbox-socket`)
                                        [ gateway ]  Docker API policy proxy, no network
