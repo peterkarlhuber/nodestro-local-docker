@@ -67,8 +67,8 @@ never in the image. A key can also come from the environment of the `nodestro` s
 Tools that Nodestro's AI writes, and their tests, run only in separate, locked-down containers: no network, read-only,
 no capabilities, user `nobody`, CPU, memory and process limits. They never run inside the Nodestro container. If that
 sandbox is unavailable, such tools are blocked; there is no fallback. See [docs/SECURITY.md](docs/SECURITY.md),
-which also explains what this protects against and what it does not (in short: use rootless Docker on Linux if you
-can).
+which also explains what this protects against and what it does not. In short: on Linux, use rootless Docker with
+cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
 
 ## Data, backups and updates
 
