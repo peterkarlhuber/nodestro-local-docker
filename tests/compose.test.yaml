@@ -1,0 +1,15 @@
+# Test additions: an OpenAI-compatible model stub on the project network (no key, no internet), for runs that call
+# tools. Never part of an installation.
+services:
+  model-stub:
+    image: python:3.13-slim
+    command: ["python", "-I", "/stub/stub.py"]
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    volumes: ["./tests/model-stub:/stub:ro"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/health')"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

@@ -1,0 +1,10 @@
+# Behind a TLS-inspecting proxy: trust its certificate authority for model providers, Python packages and image
+# builds. The launcher adds this file when NODESTRO_EXTRA_CA_FILE names the proxy's certificate bundle (PEM).
+services:
+  nodestro:
+    environment:
+      SSL_CERT_FILE: /run/nodestro-ca/ca.pem
+      REQUESTS_CA_BUNDLE: /run/nodestro-ca/ca.pem
+      NODESTRO_BUILD_CA_FILE: /run/nodestro-ca/ca.pem
+    volumes:
+      - ${NODESTRO_EXTRA_CA_FILE:?NODESTRO_EXTRA_CA_FILE names the certificate bundle}:/run/nodestro-ca/ca.pem:ro
