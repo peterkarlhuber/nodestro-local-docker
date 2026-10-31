@@ -124,7 +124,14 @@ jobs:
         run: scripts/build-image.sh | tee build.log
       - name: Set up rootless Docker for the runner user
         run: |
-          sudo apt-get install -y -q docker-ce-rootless-extras uidmap
+          sudo apt-get install -y -q uidmap
+          # The runner's Docker has no rootless extras package: take the static ones of the same version, next to
+          # its dockerd (the setup tool looks for dockerd in its own folder).
+          version="$(docker version --format '{{.Server.Version}}')"
+          dir="$(dirname "$(command -v dockerd)")"
+          curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-rootless-extras-${version}.tgz" \
+            | sudo tar -xz -C "$dir" --strip-components=1
+          ls -l "$dir"/dockerd-rootless*.sh "$dir"/rootlesskit
           # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; rootlesskit needs them.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           sudo mkdir -p /etc/systemd/system/user@.service.d
