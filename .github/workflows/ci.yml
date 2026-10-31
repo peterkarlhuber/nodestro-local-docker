@@ -147,8 +147,12 @@ jobs:
         run: |
           export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
           docker info --format '{{.SecurityOptions}} cgroup v{{.CgroupVersion}} {{.CgroupDriver}}'
-          docker info --format '{{.MemoryLimit}} {{.PidsLimit}} {{.CpuCfsQuota}} {{.CpuCfsPeriod}}' | tee limits
-          [ "$(cat limits)" = "true true true true" ] || { echo "the rootless daemon cannot enforce the limits"; exit 1; }
+          # The same /info fields the gateway requires (nodestro-runtime: no sandbox without enforced limits).
+          docker info --format '{{json .}}' | python3 -I -c 'import json, sys
+          info = json.load(sys.stdin)
+          names = ("MemoryLimit", "PidsLimit", "CpuCfsQuota", "CpuCfsPeriod")
+          print({name: info.get(name) for name in names})
+          sys.exit(not all(info.get(name) is True for name in names))'
           docker save nodestro-local:dev | docker load
       - name: End-to-end tests on rootless Docker (the launcher finds the rootless socket itself)
         env:
