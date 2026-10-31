@@ -127,13 +127,18 @@ These are known and accepted for a preview. They should be reviewed again before
    that matter, by strict request parsing, by 103 unit and protocol tests, by real-Docker tests of escape and
    request smuggling attempts (nodestro-runtime `tests/test_sandbox_gateway.py`), and by end-to-end tests from
    inside the running studio container. A request smuggling flaw that gave full Docker API access was found and
-   fixed in nodestro-runtime PR #33. An independent review is open; [SECURITY-REVIEW.md](SECURITY-REVIEW.md) is
+   fixed in nodestro-runtime PR #33. Since nodestro-runtime PR #37, the gateway refuses to start tool containers
+   or builds when the daemon cannot enforce memory, CPU and process limits (for example rootless Docker without
+   cgroup v2 delegation). An independent review is open; [SECURITY-REVIEW.md](SECURITY-REVIEW.md) is
    the package for it.
-3. **The browser cookie is shared with other localhost ports.** Browsers send `localhost` cookies to every port. A
-   local program that the user opens in the browser on another port could make the browser send the session cookie
-   to Nodestro. The strict origin check refuses every changing request and WebSocket from such a page, and read
-   requests return nothing to it, because there is no CORS. A local program that is not a browser cannot see the
-   cookie.
+3. **The browser cookie is shared with other localhost ports.** Browsers send `localhost` cookies to every port of
+   the same host name. When the user opens the page of another local program under that name, the browser sends the
+   Nodestro session cookie to **that program's server** too. That server could then use the session from a
+   non-browser client, where the Origin check does not apply. The strict origin check refuses changing requests and
+   WebSockets that such a *page* sends through the browser, and read requests return nothing to it (no CORS).
+   Mitigations: open Nodestro only through the launcher link, and do not run untrusted local web servers that you
+   open in the same browser. A dedicated host name for the studio, so that the cookie is not sent to other ports, is
+   proposed (SECURITY-REVIEW.md, D1).
 4. **Anyone who can use Docker on the host can read everything.** This includes the access key, the encrypted
    provider keys and their encryption key, which are all in the data volume. This is inherent to Docker. Docker
    access is root-equivalent on rootful Linux.
