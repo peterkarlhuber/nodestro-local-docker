@@ -5,8 +5,8 @@ listed as untested when no test environment was available, even if it is expecte
 
 | Platform | Image | Status | Evidence |
 | --- | --- | --- | --- |
-| Linux x86_64, Docker Engine | linux/amd64 | **Tested** | build plus all 14 end-to-end tests: Ubuntu 24.04, Docker 29.9.2, compose 5.6.1, kernel 6.18 (development machine), and CI `image (linux-amd64)` on GitHub's `ubuntu-24.04` |
-| Linux arm64, Docker Engine | linux/arm64 | ARM64_STATUS | ARM64_EVIDENCE |
+| Linux x86_64, Docker Engine | linux/amd64 | **Tested** | Build plus all 14 end-to-end tests, secret scan and manifest. Development machine: Ubuntu 24.04, Docker 29.9.2, compose 5.6.1, kernel 6.18. CI `image (linux-amd64)` on GitHub's `ubuntu-24.04` runner. |
+| Linux arm64, Docker Engine | linux/arm64 | **Tested** | Native build, no emulation, plus all 14 end-to-end tests, secret scan and manifest (214 packages, all with a license). CI `image (linux-arm64)` on GitHub's `ubuntu-24.04-arm` runner (aarch64, Docker 28.0.4, compose 2.38.2). First run: 2026-10-31. |
 | Windows 11, Docker Desktop (WSL 2) | linux/amd64 | **Untested** | Only the launcher's own code runs in CI (`windows-launcher`: `help` on Windows PowerShell 5.1 and PowerShell 7, on Windows Server 2025). Windows runners have no Linux containers, and no Windows 11 machine with Docker Desktop was available. |
 | macOS Apple Silicon, Docker Desktop | linux/arm64 | **Untested** | No Mac was available. The arm64 image is the one tested on Linux arm64. |
 | macOS Intel, Docker Desktop | linux/amd64 | **Untested** | No Mac was available. |
