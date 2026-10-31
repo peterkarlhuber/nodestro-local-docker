@@ -153,7 +153,7 @@ jobs:
           names = ("MemoryLimit", "PidsLimit", "CpuCfsQuota", "CpuCfsPeriod")
           print({name: info.get(name) for name in names})
           sys.exit(not all(info.get(name) is True for name in names))'
-          docker save nodestro-local:dev | docker load
+          DOCKER_HOST=unix:///var/run/docker.sock docker save nodestro-local:dev | docker load
       - name: End-to-end tests on rootless Docker (the launcher finds the rootless socket itself)
         env:
           NODESTRO_IMAGE: nodestro-local:dev
