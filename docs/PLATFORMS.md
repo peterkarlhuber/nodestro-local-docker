@@ -47,7 +47,7 @@ container is limited to that user instead of root on the host (see [SECURITY.md]
    sudo systemctl daemon-reload
    ```
 3. Check that `docker info --format '{{json .}}'` reports `MemoryLimit`, `PidsLimit`, `CpuCfsQuota` and
-   `CpuCfsPeriod` as `true`. Without these, the gateway refuses to run tool code, and the studio says so.
+   `CpuCfsPeriod` as `true`. Without these, the gateway refuses to run tool code, and such runs fail with a sandbox error.
 4. Start Nodestro with `./nodestro start`. The launcher takes the socket `/run/user/<uid>/docker.sock` from
    `DOCKER_HOST` or the current docker context and gives it to the gateway. To set it explicitly, use
    `NODESTRO_DOCKER_SOCKET`.
