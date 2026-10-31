@@ -1,0 +1,9 @@
+# Lint settings of the test code, the same rules as the Nodestro Python repositories.
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[lint.isort]
+force-sort-within-sections = true

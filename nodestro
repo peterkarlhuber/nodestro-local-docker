@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# Nodestro Local Docker launcher (Linux and macOS; Windows: nodestro.ps1).
+#
+#   ./nodestro start | stop | restart | status | open | link | logs | backup [FILE] | restore FILE
+#              update | rollback | build | uninstall [--delete-data] | help
+#
+# Needs only Docker (Docker Engine with the compose plugin, or Docker Desktop) and, for `build`, git.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+state_dir="${NODESTRO_STATE_DIR:-$here/.nodestro}"
+state="$state_dir/state.env"
+export NODESTRO_PROJECT="${NODESTRO_PROJECT:-nodestro-local}"
+export NODESTRO_PORT="${NODESTRO_PORT:-8765}"
+
+say() { printf '%s\n' "$*"; }
+fail() { printf 'Nodestro: %s\n' "$*" >&2; exit 1; }
+
+load_state() {
+  if [ -f "$state" ]; then
+    # shellcheck disable=SC1090
+    . "$state"
+  fi
+  export NODESTRO_IMAGE="${NODESTRO_IMAGE:-nodestro-local:dev}"
+}
+
+save_state() {
+  mkdir -p "$state_dir"
+  {
+    printf 'NODESTRO_IMAGE=%q\n' "$NODESTRO_IMAGE"
+    printf 'NODESTRO_PREVIOUS_IMAGE=%q\n' "${NODESTRO_PREVIOUS_IMAGE:-}"
+  } > "$state"
+}
+
+compose() {
+  local files=(-f "$here/compose.yaml")
+  if [ -n "${NODESTRO_EXTRA_CA_FILE:-}" ]; then files+=(-f "$here/compose.extra-ca.yaml"); fi
+  docker compose --project-directory "$here" "${files[@]}" "$@"
+}
+
+require_docker() {
+  command -v docker >/dev/null 2>&1 || fail "Docker is not installed. Install Docker Desktop (Windows, macOS) or Docker Engine (Linux): https://docs.docker.com/get-docker/"
+  docker info >/dev/null 2>&1 || fail "Docker is installed but not running (or you may not use it). Start Docker Desktop, or on Linux: sudo systemctl start docker (and add yourself to the docker group, or use rootless Docker)."
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is missing (docker compose). Update Docker Desktop, or install the docker-compose-plugin package."
+}
+
+require_image() {
+  if ! docker image inspect "$NODESTRO_IMAGE" >/dev/null 2>&1; then
+    say "The Nodestro image $NODESTRO_IMAGE is not here yet. Building it from source (takes several minutes, once)..."
+    build
+  fi
+}
+
+build() {
+  command -v git >/dev/null 2>&1 || fail "git is needed to build the image (it fetches the pinned sources)."
+  local tag
+  tag="$("$here/scripts/build-image.sh" | tail -n 1)"
+  NODESTRO_IMAGE="$tag"
+  save_state
+  say "Built $tag"
+}
+
+link() {
+  compose exec -T nodestro nodestro-local link --port "$NODESTRO_PORT" | tr -d '\r'
+}
+
+open_browser() {
+  local url page opener=""
+  url="$(link)"
+  # The browser gets a private file that forwards to the link, so the access key never appears in a process list.
+  page="$(umask 077 && mktemp "${TMPDIR:-/tmp}/nodestro-open-XXXXXX")"
+  mv "$page" "$page.html" && page="$page.html"
+  printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=%s"><title>Nodestro</title>' "$url" > "$page"
+  if command -v xdg-open >/dev/null 2>&1; then opener=xdg-open
+  elif command -v open >/dev/null 2>&1; then opener=open
+  elif command -v wslview >/dev/null 2>&1; then opener=wslview
+  fi
+  say "Nodestro is running. Open it with this link (it contains your access key, keep it private):"
+  say "  $url"
+  if [ -n "$opener" ] && [ -z "${NODESTRO_NO_BROWSER:-}" ]; then
+    "$opener" "$page" >/dev/null 2>&1 || true
+    ( sleep 60; rm -f "$page" ) >/dev/null 2>&1 &
+  else
+    rm -f "$page"
+  fi
+}
+
+start() {
+  require_docker
+  load_state
+  require_image
+  say "Starting Nodestro (image $NODESTRO_IMAGE, http://127.0.0.1:$NODESTRO_PORT)..."
+  if ! compose up -d --wait --wait-timeout 300; then
+    compose ps || true
+    compose logs --tail 40 || true
+    fail "Nodestro did not start. The lines above say why (a port in use: set NODESTRO_PORT=another port)."
+  fi
+  open_browser
+}
+
+volume() { printf '%s_%s' "$NODESTRO_PROJECT" "$1"; }
+
+copy_volume() { # FROM TO: replace the contents of volume TO with those of FROM (both must exist)
+  docker run --rm --network none --user 0:0 --entrypoint sh \
+    -v "$1:/from:ro" -v "$2:/to" "$NODESTRO_IMAGE" \
+    -c 'find /to -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a /from/. /to/'
+}
+
+update() {
+  require_docker
+  load_state
+  local previous="$NODESTRO_IMAGE" snapshot
+  snapshot="$(volume data-before-update)"
+  if compose ps --status running --services 2>/dev/null | grep -qx nodestro; then
+    mkdir -p "$here/backups"
+    local file
+    file="$here/backups/before-update-$(date +%Y%m%d-%H%M%S).zip"
+    compose exec -T nodestro nodestro-local backup > "$file" && say "Backup written to $file"
+  fi
+  if [ -n "${NODESTRO_UPDATE_IMAGE:-}" ]; then  # an image built or loaded elsewhere
+    docker image inspect "$NODESTRO_UPDATE_IMAGE" >/dev/null 2>&1 || fail "The image $NODESTRO_UPDATE_IMAGE is missing."
+    NODESTRO_IMAGE="$NODESTRO_UPDATE_IMAGE"
+  else
+    build
+  fi
+  local next="$NODESTRO_IMAGE"
+  NODESTRO_IMAGE="$previous"
+  say "Stopping Nodestro and keeping a copy of its data for a rollback..."
+  compose stop nodestro >/dev/null
+  docker volume create "$snapshot" >/dev/null
+  if docker volume inspect "$(volume data)" >/dev/null 2>&1; then copy_volume "$(volume data)" "$snapshot"; fi
+  NODESTRO_PREVIOUS_IMAGE="$previous"
+  NODESTRO_IMAGE="$next"
+  save_state
+  if ! compose up -d --wait --wait-timeout 300; then
+    say "The new version did not start; going back to $previous."
+    rollback
+    fail "Update failed and was rolled back."
+  fi
+  say "Updated to $next (rollback: ./nodestro rollback)."
+  open_browser
+}
+
+rollback() {
+  require_docker
+  load_state
+  [ -n "${NODESTRO_PREVIOUS_IMAGE:-}" ] || fail "There is no earlier version to go back to."
+  docker volume inspect "$(volume data-before-update)" >/dev/null 2>&1 || fail "The copy of the data from before the update is missing."
+  compose stop nodestro >/dev/null 2>&1 || true
+  copy_volume "$(volume data-before-update)" "$(volume data)"
+  NODESTRO_IMAGE="$NODESTRO_PREVIOUS_IMAGE"
+  NODESTRO_PREVIOUS_IMAGE=""
+  save_state
+  compose up -d --wait --wait-timeout 300 || fail "The earlier version did not start either; see: ./nodestro logs"
+  say "Back on $NODESTRO_IMAGE with the data from before the update."
+}
+
+command="${1:-help}"
+shift || true
+case "$command" in
+  start) start ;;
+  stop) require_docker; load_state; compose stop; say "Nodestro stopped. Your data is kept (start again: ./nodestro start)." ;;
+  restart) require_docker; load_state; compose restart; compose up -d --wait --wait-timeout 300; open_browser ;;
+  status)
+    require_docker; load_state
+    compose ps
+    compose exec -T nodestro nodestro-local status 2>/dev/null || say "Nodestro is not running."
+    ;;
+  open) require_docker; load_state; open_browser ;;
+  link) require_docker; load_state; link ;;
+  logs) require_docker; load_state; compose logs --tail "${1:-200}" ;;
+  backup)
+    require_docker; load_state
+    file="${1:-$here/backups/nodestro-backup-$(date +%Y%m%d-%H%M%S).zip}"
+    mkdir -p "$(dirname "$file")"
+    compose exec -T nodestro nodestro-local backup > "$file" || { rm -f "$file"; fail "The backup failed (is Nodestro running?)"; }
+    say "Backup written to $file"
+    ;;
+  restore)
+    require_docker; load_state
+    [ -f "${1:-}" ] || fail "Name the backup file: ./nodestro restore FILE"
+    compose exec -T nodestro nodestro-local restore < "$1"
+    say "Restored $1 (the state before it was saved as a safety backup inside Nodestro)."
+    ;;
+  update) update ;;
+  rollback) rollback ;;
+  build) require_docker; load_state; build ;;
+  rotate-key)
+    require_docker; load_state
+    compose exec -T nodestro nodestro-local rotate-key
+    compose restart nodestro; compose up -d --wait --wait-timeout 300; open_browser
+    ;;
+  uninstall)
+    require_docker; load_state
+    if [ "${1:-}" = "--delete-data" ]; then
+      compose down -v; docker volume rm "$(volume data-before-update)" >/dev/null 2>&1 || true
+      say "Nodestro and all its data were removed."
+    else
+      compose down; say "Nodestro was removed; its data volume $(volume data) is kept."
+    fi
+    ;;
+  help|-h|--help)
+    sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *) fail "Unknown command $command (see ./nodestro help)" ;;
+esac

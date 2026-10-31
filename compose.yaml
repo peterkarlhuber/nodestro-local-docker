@@ -1,0 +1,77 @@
+# Nodestro Local Docker: the Nodestro studio for one person, on Linux, Windows or macOS with Docker or Docker Desktop.
+#
+#   ./nodestro start          (Windows: .\nodestro.ps1 start)
+#
+# Two containers from the same image:
+#
+# - `nodestro`: the studio (web interface and API) on SQLite in the volume `data`. Its port is published on the host's
+#   loopback only (127.0.0.1); every request needs the access key (the launcher opens the browser with it).
+# - `gateway`: the only container with the host's Docker socket. It has no network, no capabilities and a read-only
+#   file system, and offers `nodestro` a socket of its own on which only locked-down tool containers can be started
+#   (no network, read-only, no capabilities, user nobody, limits). See docs/SECURITY.md.
+#
+# Settings (environment or .env next to this file): NODESTRO_PORT (8765), NODESTRO_IMAGE, NODESTRO_DOCKER_SOCKET
+# (/var/run/docker.sock; rootless Docker: $XDG_RUNTIME_DIR/docker.sock), NODESTRO_SANDBOX_MAX_CONTAINERS (4).
+name: ${NODESTRO_PROJECT:-nodestro-local}
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  init: false # the image starts tini itself
+
+services:
+  gateway:
+    <<: *hardening
+    image: ${NODESTRO_IMAGE:-nodestro-local:dev}
+    command: ["gateway", "--listen", "/run/nodestro-sandbox/docker.sock", "--docker", "/var/run/docker.sock"]
+    # root without capabilities: enough to use the host's socket (owned by root), nothing else.
+    user: "0:0"
+    group_add: ["10001"] # to hand its own socket to the studio's group
+    network_mode: none
+    environment:
+      NODESTRO_SANDBOX_INSTANCE: ${NODESTRO_PROJECT:-nodestro-local}
+      NODESTRO_SANDBOX_SOCKET_GID: "10001"
+      NODESTRO_SANDBOX_MAX_CONTAINERS: ${NODESTRO_SANDBOX_MAX_CONTAINERS:-4}
+      NODESTRO_SANDBOX_MAX_MEMORY_MB: ${NODESTRO_SANDBOX_MAX_MEMORY_MB:-2048}
+      NODESTRO_SANDBOX_MAX_CPUS: ${NODESTRO_SANDBOX_MAX_CPUS:-2}
+    volumes:
+      - ${NODESTRO_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - sandbox-socket:/run/nodestro-sandbox
+    mem_limit: 256m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "python", "-I", "-c", "import os, stat, sys; sys.exit(not stat.S_ISSOCK(os.stat('/run/nodestro-sandbox/docker.sock').st_mode))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  nodestro:
+    <<: *hardening
+    image: ${NODESTRO_IMAGE:-nodestro-local:dev}
+    command: ["serve"]
+    environment:
+      NODESTRO_HOST_PORT: ${NODESTRO_PORT:-8765}
+    ports:
+      - "127.0.0.1:${NODESTRO_PORT:-8765}:8080"
+    volumes:
+      - data:/var/lib/nodestro
+      - sandbox-socket:/run/nodestro-sandbox
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    depends_on:
+      gateway: {condition: service_healthy}
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-I", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4)"]
+      interval: 3s
+      timeout: 5s
+      start_period: 120s
+      retries: 40
+
+volumes:
+  # Workflows, runs, knowledge, settings and the access key. Kept by stop, restart and update; removed only by
+  # `./nodestro uninstall --delete-data` (or `docker compose down -v`).
+  data:
+  sandbox-socket:
