@@ -53,8 +53,8 @@ Other computers on your network cannot reach it, and a browser without the acces
 | `./nodestro rotate-key` | Replace the access key (old links and sessions stop working) |
 | `./nodestro uninstall` | Remove the containers, keep the data (`--delete-data`: remove everything) |
 
-On Windows, `.\nodestro.ps1` has the same commands except `update` and `rollback` (run `./nodestro` in WSL or Git
-Bash for those, or back up, `build` and `start`).
+On Windows, `.\nodestro.ps1` has the same commands. `build` and `update` need `bash` and `git` (Git for Windows or
+WSL) to build the image.
 
 ## Model providers
 
