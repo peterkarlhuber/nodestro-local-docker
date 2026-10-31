@@ -55,7 +55,6 @@ def test_shout():
 """
 
 
-
 def _free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -73,6 +72,16 @@ ENV = {
     "NODESTRO_NO_BROWSER": "1",
     "NODESTRO_STATE_DIR": str(STATE),
 }
+# Rootless Docker: the launcher finds the user's socket itself; the tests' own compose calls need it named.
+_HOST = os.environ.get("DOCKER_HOST", "")
+if _HOST.startswith("unix:///run/user/") and not os.environ.get("NODESTRO_DOCKER_SOCKET"):
+    ENV["NODESTRO_DOCKER_SOCKET"] = _HOST[len("unix://") :]
+#: The launcher under test: ./nodestro, or with NODESTRO_E2E_LAUNCHER=pwsh the Windows launcher on PowerShell 7.
+LAUNCHER = (
+    ["pwsh", "-NoProfile", "-File", str(ROOT / "nodestro.ps1")]
+    if os.environ.get("NODESTRO_E2E_LAUNCHER") == "pwsh"
+    else [str(ROOT / "nodestro")]
+)
 FILES = ["-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "tests" / "compose.test.yaml")]
 if os.environ.get("NODESTRO_EXTRA_CA_FILE"):
     FILES += ["-f", str(ROOT / "compose.extra-ca.yaml")]
@@ -163,11 +172,9 @@ def browser() -> Client:
 
 
 def launcher(*args: str, check: bool = True, timeout: float = 900) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        [str(ROOT / "nodestro"), *args], env=ENV, capture_output=True, text=True, timeout=timeout, check=False
-    )
+    result = subprocess.run([*LAUNCHER, *args], env=ENV, capture_output=True, text=True, timeout=timeout, check=False)
     if check and result.returncode != 0:
-        raise AssertionError(f"./nodestro {' '.join(args)} failed:\n{result.stdout}\n{result.stderr}")
+        raise AssertionError(f"{LAUNCHER[-1]} {' '.join(args)} failed:\n{result.stdout}\n{result.stderr}")
     return result
 
 
@@ -421,7 +428,7 @@ def test_update_and_rollback_keep_the_data() -> None:
     docker("tag", IMAGE, "nodestro-local:e2e-next")
     try:
         result = subprocess.run(
-            [str(ROOT / "nodestro"), "update"],
+            [*LAUNCHER, "update"],
             env={**ENV, "NODESTRO_UPDATE_IMAGE": "nodestro-local:e2e-next"},
             capture_output=True,
             text=True,

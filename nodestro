@@ -41,6 +41,22 @@ require_docker() {
   command -v docker >/dev/null 2>&1 || fail "Docker is not installed. Install Docker Desktop (Windows, macOS) or Docker Engine (Linux): https://docs.docker.com/get-docker/"
   docker info >/dev/null 2>&1 || fail "Docker is installed but not running (or you may not use it). Start Docker Desktop, or on Linux: sudo systemctl start docker (and add yourself to the docker group, or use rootless Docker)."
   docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is missing (docker compose). Update Docker Desktop, or install the docker-compose-plugin package."
+  rootless_socket
+}
+
+# Rootless Docker: the gateway needs the user's daemon socket, not /var/run/docker.sock. It is taken from DOCKER_HOST
+# or the current docker context, but only when it is a rootless socket (/run/user/<uid>/docker.sock). Docker
+# Desktop's contexts name a socket on the host that does not exist inside its VM, so they keep the default.
+rootless_socket() {
+  [ -z "${NODESTRO_DOCKER_SOCKET:-}" ] || return 0
+  local host
+  host="$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null || true)"
+  case "$host" in
+    unix:///run/user/[0-9]*/docker.sock)
+      export NODESTRO_DOCKER_SOCKET="${host#unix://}"
+      say "Rootless Docker: the sandbox gateway uses $NODESTRO_DOCKER_SOCKET." >&2
+      ;;
+  esac
 }
 
 require_image() {

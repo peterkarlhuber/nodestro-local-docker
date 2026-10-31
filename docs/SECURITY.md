@@ -116,8 +116,9 @@ These are known and accepted for a preview. They should be reviewed again before
    isolation: namespaces, cgroups, the default seccomp profile, and AppArmor or SELinux where the host has them.
    They also have the restrictions above. A kernel or container-runtime vulnerability can break out of any
    container.
-   - With **rootful Docker on Linux**, an escape is root on the host. **Use rootless Docker** when you can
-     (`NODESTRO_DOCKER_SOCKET=$XDG_RUNTIME_DIR/docker.sock`); then an escape is limited to the user who runs Docker.
+   - With **rootful Docker on Linux**, an escape is root on the host. **Use rootless Docker** with cgroup v2 when
+     you can. It is tested and recommended; see [PLATFORMS.md](PLATFORMS.md#rootless-docker). An escape is then
+     limited to the user who runs Docker, which still means all of that user's files.
    - On **Docker Desktop** (Windows, macOS), containers run in a Linux VM. An escape reaches that VM, which can see
      the host folders shared with Docker Desktop.
    - Not tested here: gVisor (`runsc`) as the runtime of tool containers. The gateway could require it. It is the
