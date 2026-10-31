@@ -124,9 +124,11 @@ These are known and accepted for a preview. They should be reviewed again before
      recommended next hardening step.
 2. **The gateway is a security boundary.** A flaw in its request checks could let the Nodestro container start a
    less restricted container. This is mitigated by allow-lists rather than deny-lists, by refusing unknown fields
-   that matter, by 85 unit and protocol tests, by a real-Docker test of escape attempts (nodestro-runtime
-   `tests/test_sandbox_gateway.py`), and by end-to-end tests from inside the running studio container. The code
-   should get an independent review before a release.
+   that matter, by strict request parsing, by 103 unit and protocol tests, by real-Docker tests of escape and
+   request smuggling attempts (nodestro-runtime `tests/test_sandbox_gateway.py`), and by end-to-end tests from
+   inside the running studio container. A request smuggling flaw that gave full Docker API access was found and
+   fixed in nodestro-runtime PR #33. An independent review is open; [SECURITY-REVIEW.md](SECURITY-REVIEW.md) is
+   the package for it.
 3. **The browser cookie is shared with other localhost ports.** Browsers send `localhost` cookies to every port. A
    local program that the user opens in the browser on another port could make the browser send the session cookie
    to Nodestro. The strict origin check refuses every changing request and WebSocket from such a page, and read
