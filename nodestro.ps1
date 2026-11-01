@@ -41,6 +41,9 @@ function Save-State {
 function Invoke-Compose {
     $files = @("-f", (Join-Path $Here "compose.yaml"))
     if ($env:NODESTRO_EXTRA_CA_FILE) { $files += @("-f", (Join-Path $Here "compose.extra-ca.yaml")) }
+    # The user's own additions (README: model providers), as plain `docker compose` would read them.
+    $override = Join-Path $Here "compose.override.yaml"
+    if (Test-Path -LiteralPath $override -PathType Leaf) { $files += @("-f", $override) }
     & docker compose --project-directory $Here @files @args
     if ($LASTEXITCODE -ne 0) { throw "docker compose $($args -join ' ') failed" }
 }

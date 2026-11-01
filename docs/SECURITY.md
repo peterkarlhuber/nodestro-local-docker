@@ -180,5 +180,10 @@ These are known and accepted for a preview. They should be reviewed again before
   into the image.
 - Provider API keys belong to the running studio (encrypted in the data volume) or to its environment, never to the
   build.
+- AWS credentials (Amazon Bedrock): none in the container by default (no `AWS_*` variables, no `~/.aws`). The user may
+  add them in a `compose.override.yaml`, as variables or as a read-only mount outside the data volume (never into
+  `/var/lib/nodestro`, because backups contain the whole data volume); see the README. Only the default AWS
+  credential chain of the `nodestro` container is used. Tool containers get none of them: they are started by the
+  gateway with their own environment, no mounts of the host and no network.
 - `scripts/scan-image.sh` scans every layer of the image for secrets (nodestro-server's `scan_secrets.py`). CI runs
   it on every build.
