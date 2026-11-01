@@ -35,6 +35,9 @@ Nodestro again at any time with `./nodestro open`, or print the link with `./nod
 
 Nodestro listens only on `127.0.0.1` (default port 8765; another port: `NODESTRO_PORT=9000 ./nodestro start`).
 Other computers on your network cannot reach it, and a browser without the access key gets only a sign-in hint.
+The link opens your installation's own host name, `nodestro-<random>.localhost`, so that other local web servers
+never receive your session cookie ([docs/SESSIONS.md](docs/SESSIONS.md)). A browser session lasts at most 24 hours
+(8 hours without use); sign out at `/api/logout`, or end every session with `./nodestro logout`.
 
 ## Everyday commands
 
@@ -45,12 +48,13 @@ Other computers on your network cannot reach it, and a browser without the acces
 | `./nodestro restart` | Restart it |
 | `./nodestro status` | Containers, health and whether the tool sandbox is available |
 | `./nodestro open` / `link` | Open the browser / print the link with the access key |
+| `./nodestro logout` | End every browser session (open Nodestro again with `open`) |
 | `./nodestro logs [N]` | The last N log lines (the access key is never logged) |
 | `./nodestro backup [FILE]` | Complete backup as a ZIP file (default: `backups/`) |
 | `./nodestro restore FILE` | Restore a backup (the state before it is kept as a safety backup) |
 | `./nodestro update` | Build the current version, back up, switch, roll back automatically on failure |
 | `./nodestro rollback` | Go back to the version and data from before the last update |
-| `./nodestro rotate-key` | Replace the access key (old links and sessions stop working) |
+| `./nodestro rotate-key` | Replace the access key and the host name (old links and sessions stop working) |
 | `./nodestro uninstall` | Remove the containers, keep the data (`--delete-data`: remove everything) |
 
 On Windows, `.\nodestro.ps1` has the same commands. `build` and `update` need `bash` and `git` (Git for Windows or
@@ -92,6 +96,7 @@ cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the decision (variants compared), components, what is reused
+- [docs/SESSIONS.md](docs/SESSIONS.md): how browser sessions work (host name, lifetime, logout, browsers)
 - [docs/SECURITY.md](docs/SECURITY.md): the security model, container and sandbox configuration, residual risks
 - [docs/PLATFORMS.md](docs/PLATFORMS.md): what was tested where, and what was not
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): building, testing, pins, CI

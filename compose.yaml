@@ -11,7 +11,8 @@
 #   (no network, read-only, no capabilities, user nobody, limits). See docs/SECURITY.md.
 #
 # Settings (environment or .env next to this file): NODESTRO_PORT (8765), NODESTRO_IMAGE, NODESTRO_DOCKER_SOCKET
-# (/var/run/docker.sock; rootless Docker: $XDG_RUNTIME_DIR/docker.sock), NODESTRO_SANDBOX_MAX_CONTAINERS (4).
+# (/var/run/docker.sock; rootless Docker: $XDG_RUNTIME_DIR/docker.sock), NODESTRO_SANDBOX_MAX_CONTAINERS (4),
+# NODESTRO_BROWSER_HOST (empty: the installation's random *.localhost name; another name weakens docs/SESSIONS.md).
 name: ${NODESTRO_PROJECT:-nodestro-local}
 
 x-hardening: &hardening
@@ -53,6 +54,8 @@ services:
     command: ["serve"]
     environment:
       NODESTRO_HOST_PORT: ${NODESTRO_PORT:-8765}
+      # Empty: the random nodestro-<random>.localhost name of this installation (docs/SESSIONS.md).
+      NODESTRO_BROWSER_HOST: ${NODESTRO_BROWSER_HOST:-}
     ports:
       - "127.0.0.1:${NODESTRO_PORT:-8765}:8080"
     volumes:

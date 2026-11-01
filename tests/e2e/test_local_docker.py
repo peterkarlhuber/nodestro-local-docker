@@ -112,12 +112,20 @@ def wait_for(condition: Callable[[], Any], *, timeout: float, what: str, every: 
     raise AssertionError(f"timed out waiting for {what}")
 
 
-class Client:
-    """A browser or script on the host: requests to 127.0.0.1:<port> with a cookie jar."""
+#: The launch link: the installation's random browser host name (docs/SESSIONS.md), the port and the key.
+LINK = re.compile(rf"http://(nodestro-[a-z0-9]{{10}}\.localhost):{PORT}/api/launch\?token=([A-Za-z0-9_-]{{43}})")
 
-    def __init__(self, base: str = f"http://127.0.0.1:{PORT}", *, origin: str | None = None) -> None:
-        self.base = base
-        self.origin = origin or base
+
+class Client:
+    """A browser or script on the host: requests to 127.0.0.1:<port> with a cookie jar.
+
+    ``host`` is the name the browser sends in ``Host`` (``*.localhost`` names resolve to loopback in browsers, but not
+    necessarily in this test's resolver, so the connection always goes to 127.0.0.1)."""
+
+    def __init__(self, host: str | None = None, *, origin: str | None = None) -> None:
+        self.base = f"http://127.0.0.1:{PORT}"
+        self.host = host
+        self.origin = origin or (f"http://{host}:{PORT}" if host else self.base)
         self.cookies: dict[str, str] = {}
         self.headers: dict[str, str] = {}
 
@@ -125,6 +133,8 @@ class Client:
                 timeout: float = 120) -> tuple[int, Any, dict[str, str]]:  # fmt: skip
         data = json.dumps(body).encode() if body is not None else None
         sent = {"Accept": "application/json", **self.headers, **(headers or {})}
+        if self.host and "Host" not in sent:
+            sent["Host"] = f"{self.host}:{PORT}"
         if data is not None:
             sent["Content-Type"] = "application/json"
         if method not in ("GET", "HEAD"):
@@ -134,10 +144,10 @@ class Client:
         request = urllib.request.Request(self.base + path, data=data, method=method, headers=sent)
         try:
             with urllib.request.urlopen(request, timeout=timeout) as answer:
-                status, raw, received = answer.status, answer.read(), dict(answer.headers)
+                status, raw, received = answer.status, answer.read(), {k.lower(): v for k, v in answer.headers.items()}
                 cookie_headers = answer.headers.get_all("Set-Cookie") or []
         except urllib.error.HTTPError as error:
-            status, raw, received = error.code, error.read(), dict(error.headers)
+            status, raw, received = error.code, error.read(), {k.lower(): v for k, v in error.headers.items()}
             cookie_headers = error.headers.get_all("Set-Cookie") or []
         for header in cookie_headers:
             name, _, rest = header.partition("=")
@@ -162,12 +172,26 @@ def link() -> str:
     return str(compose("exec", "-T", "nodestro", "nodestro-local", "link", "--port", str(PORT)).stdout.decode().strip())
 
 
+def browser_host() -> str:
+    found = LINK.fullmatch(link())
+    assert found, link()
+    return found.group(1)
+
+
+def access_key() -> str:
+    found = LINK.fullmatch(link())
+    assert found, link()
+    return found.group(2)
+
+
 def browser() -> Client:
-    client = Client()
     url = link()
-    assert url.startswith(f"http://127.0.0.1:{PORT}/api/launch?token=")
-    status, _, _ = client.get(url[len(client.base) :])
+    found = LINK.fullmatch(url)
+    assert found, url
+    client = Client(found.group(1))
+    status, _, headers = client.get(f"/api/launch?token={found.group(2)}")
     assert status == 200 and "nodestro_local_session" in client.cookies
+    assert headers["referrer-policy"] == "no-referrer"
     return client
 
 
@@ -190,7 +214,7 @@ def installation() -> Iterator[None]:
         pytest.fail(f"the image {IMAGE} is missing: build it with scripts/build-image.sh")
     compose("down", "-v", "--remove-orphans", check=False)
     started = launcher("start")
-    assert f"http://127.0.0.1:{PORT}/api/launch?token=" in started.stdout
+    assert LINK.search(started.stdout), started.stdout
     compose("up", "-d", "--wait", "model-stub")
     try:
         yield
@@ -229,9 +253,12 @@ def test_the_containers_are_locked_down() -> None:
 def test_the_access_key_is_private_and_never_logged() -> None:
     mode = compose("exec", "-T", "nodestro", "stat", "-c", "%a %u", "/var/lib/nodestro/secrets/access-key").stdout
     assert mode.decode().split() == ["600", "10001"]
-    key = link().split("token=", 1)[1]
+    mode = compose("exec", "-T", "nodestro", "stat", "-c", "%a %u", "/var/lib/nodestro/secrets/browser-host").stdout
+    assert mode.decode().split() == ["600", "10001"]
+    key, host = access_key(), browser_host()
     browser()  # a launch is in the access log
-    assert key not in compose("logs", "--no-color").stdout.decode()
+    logs = compose("logs", "--no-color").stdout.decode()
+    assert key not in logs and host not in logs
     assert key not in json.dumps(container("nodestro")["Config"])
 
 
@@ -253,8 +280,45 @@ def test_the_link_opens_a_session_and_scripts_use_the_key() -> None:
     client = browser()
     assert client.get("/api/workflows")[0] == 200
     script = Client()
-    script.headers["Authorization"] = "Bearer " + link().split("token=", 1)[1]
+    script.headers["Authorization"] = "Bearer " + access_key()
     assert script.get("/api/workflows")[0] == 200
+
+
+def test_browser_sessions_exist_only_under_the_installation_s_host_name() -> None:
+    client = browser()
+    session = client.cookies["nodestro_local_session"]
+    # 127.0.0.1 and localhost are shared with every other local web server: no session is opened there ...
+    for name in ("127.0.0.1", "localhost"):
+        shared = Client(name)
+        status, body, headers = shared.get(f"/api/launch?token={access_key()}")
+        assert status == 403 and body["code"] == "access.launch_host", name
+        assert "set-cookie" not in headers and not shared.cookies
+        # ... and a session cookie that reaches such a name (another server collected it) is not accepted.
+        shared.cookies["nodestro_local_session"] = session
+        assert shared.get("/api/workflows")[0] == 401, name
+    assert client.get("/api/workflows")[0] == 200
+
+
+def test_only_the_published_port_is_answered() -> None:
+    client = browser()
+    status, body, _ = client.get("/api/workflows", headers={"Host": f"{browser_host()}:3000"})
+    assert status == 403 and body["code"] == "request.port_not_allowed"
+    assert client.get("/api/workflows")[0] == 200
+
+
+def test_logout_ends_the_session_and_the_launcher_ends_all() -> None:
+    first, second = browser(), browser()
+    status, page, _ = first.get("/api/logout", headers={"Accept": "text/html"})
+    assert status == 200 and 'action="/api/logout"' in page
+    # Another page cannot sign the person out.
+    assert first.post("/api/logout", headers={"Origin": "http://localhost:3000"})[0] == 403
+    assert first.get("/api/workflows")[0] == 200
+    status, _, headers = first.post("/api/logout", headers={"Accept": "text/html"})
+    assert status == 200 and "Max-Age=0" in headers["set-cookie"]
+    assert first.get("/api/workflows")[0] == 401
+    assert second.get("/api/workflows")[0] == 200
+    assert "ended" in launcher("logout").stdout
+    assert second.get("/api/workflows")[0] == 401
 
 
 def test_foreign_host_names_and_origins_are_refused() -> None:

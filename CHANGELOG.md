@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Browser sessions on a private host name, logout, hardened gateway (2026-10-31)
+
+- The launch link opens the installation's own random host name, `nodestro-<random>.localhost`. Cookies are scoped
+  by host name, not port, so the session cookie no longer reaches other local web servers on `localhost` or
+  `127.0.0.1` (D1, api PR #29). Design and browser compatibility: [docs/SESSIONS.md](docs/SESSIONS.md).
+- Browser sessions end after 8 hours without use and 24 hours at most. `./nodestro logout` and
+  `.\nodestro.ps1 logout` end every session; `/api/logout` signs out one browser.
+- `compose.yaml` passes `NODESTRO_BROWSER_HOST` (empty by default). Setting it to `127.0.0.1` or `localhost` gives
+  up the protection, and the launcher warns.
+- D3: only the published port is answered in `Host`; the documentation said so before, and now the code checks it.
+- The image contains the hardened sandbox gateway of runtime PR #47 (image and connection limits, build queue,
+  seccomp check, strict `ca.pem`, digest-pinned base images) and the digest-pinned base images of server PR #7.
+- `components.json` pins studio `66fe676` (before `0609fbb`) and server `bfa2e86` (before `df993bc`): runtime `a13f894`,
+  api `c58d5de`, orkexa `b91d0b7`.
+- The end-to-end tests check the host name file, sessions under shared names, ports and logout.
+
 ### Sandbox gateway security fixes in the image (2026-10-31)
 
 - `components.json` pins studio `0609fbb` (before `c4b3708`) and server `df993bc` (before `e4791a8`). The image

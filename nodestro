@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Nodestro Local Docker launcher (Linux and macOS; Windows: nodestro.ps1).
 #
-#   ./nodestro start | stop | restart | status | open | link | logs | backup [FILE] | restore FILE
-#              update | rollback | build | uninstall [--delete-data] | help
+#   ./nodestro start | stop | restart | status | open | link | logout | logs | backup [FILE] | restore FILE
+#              update | rollback | build | rotate-key | uninstall [--delete-data] | help
 #
 # Needs only Docker (Docker Engine with the compose plugin, or Docker Desktop) and, for `build`, git.
 set -euo pipefail
@@ -104,7 +104,7 @@ start() {
   require_docker
   load_state
   require_image
-  say "Starting Nodestro (image $NODESTRO_IMAGE, http://127.0.0.1:$NODESTRO_PORT)..."
+  say "Starting Nodestro (image $NODESTRO_IMAGE, port $NODESTRO_PORT on 127.0.0.1)..."
   if ! compose up -d --wait --wait-timeout 300; then
     compose ps || true
     compose logs --tail 40 || true
@@ -183,6 +183,7 @@ case "$command" in
     ;;
   open) require_docker; load_state; open_browser ;;
   link) require_docker; load_state; link ;;
+  logout) require_docker; load_state; compose exec -T nodestro nodestro-local logout ;;
   logs) require_docker; load_state; compose logs --tail "${1:-200}" ;;
   backup)
     require_docker; load_state
