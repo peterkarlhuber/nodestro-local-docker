@@ -174,11 +174,12 @@ None known beyond the platform items below.
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
-| LD-001 | nodestro-runtime | `sandbox_gateway.py` (gateway code) | Review covers code there |
-| LD-012 | nodestro-runtime | Optional forced gVisor runtime; second check of created containers' limits | Hardening owned there |
+| LD-001 | nodestro-runtime | `sandbox_gateway.py` (gateway code), RT-003 | Review covers code there |
+| LD-012 | nodestro-runtime | RT-003 (optional forced gVisor runtime; second check of created containers' limits) | Hardening owned there |
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
 | – | nodestro-server | SRV-003 image vulnerability scan (same image definition, target `local`) | Covers this image |
-| – | nodestro-studio | No `nodestro-local-docker` entry in `platform/versions.json` `products` | Owned there |
+| – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
+| LD-009 | nodestro-server, nodestro-desktop | SRV-016, DSK-013 (pins at branch heads) | Re-pin in the same cascade |
 
 ## Maintaining this file
 
