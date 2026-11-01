@@ -63,8 +63,44 @@ WSL) to build the image.
 ## Model providers
 
 Enter provider API keys in the studio (Settings), as on the desktop. They are stored encrypted in the data volume,
-never in the image. A key can also come from the environment of the `nodestro` service (for example in a
-`compose.override.yaml`). Behind a TLS-inspecting proxy, set `NODESTRO_EXTRA_CA_FILE` to its certificate bundle.
+never in the image. A key can also come from the environment of the `nodestro` service, in a `compose.override.yaml`
+next to `compose.yaml` (the launcher adds it when it exists; it is not part of the repository). Behind a
+TLS-inspecting proxy, set `NODESTRO_EXTRA_CA_FILE` to its certificate bundle (this also sets `AWS_CA_BUNDLE`,
+because the AWS SDK ignores `SSL_CERT_FILE`).
+
+**Amazon Bedrock (AWS)** has no API key and uses only the AWS default credential chain inside the `nodestro`
+container. By default the container has **no AWS credentials**: no `AWS_*` variables and no `~/.aws`. To use
+Bedrock, give it credentials in `compose.override.yaml`, either as a read-only mount of your `~/.aws`:
+
+```yaml
+services:
+  nodestro:
+    environment:
+      AWS_CONFIG_FILE: /run/nodestro-aws/config
+      AWS_SHARED_CREDENTIALS_FILE: /run/nodestro-aws/credentials
+      AWS_PROFILE: work          # optional: a profile from your ~/.aws/config
+    volumes:
+      - ~/.aws:/run/nodestro-aws:ro
+```
+
+or as variables taken from your shell when you run `./nodestro start` (for example after
+`eval "$(aws configure export-credentials --profile work --format env)"`; they expire like the session they come from):
+
+```yaml
+services:
+  nodestro:
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+```
+
+Then choose the region in Settings. Never mount AWS credentials into the data volume (`/var/lib/nodestro`, the
+container's home): backups include it. The mount is read-only, so IAM Identity Center (SSO) tokens cannot be refreshed
+inside the container: run `aws sso login` on the host when they expire. The container runs as user 10001: on Linux,
+your own `~/.aws` files (mode 600) are not readable by it, so use the variables there, or a separate folder readable
+by user 10001. AI-generated tools never see these credentials (they run in separate sandbox containers). Network
+access needed: `bedrock-runtime.<region>`, `bedrock.<region>` and `sts.<region>.amazonaws.com`.
 
 ## AI-generated tools
 

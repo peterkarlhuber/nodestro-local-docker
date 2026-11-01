@@ -34,6 +34,8 @@ save_state() {
 compose() {
   local files=(-f "$here/compose.yaml")
   if [ -n "${NODESTRO_EXTRA_CA_FILE:-}" ]; then files+=(-f "$here/compose.extra-ca.yaml"); fi
+  # The user's own additions (README: model providers), as plain `docker compose` would read them.
+  if [ -f "$here/compose.override.yaml" ]; then files+=(-f "$here/compose.override.yaml"); fi
   docker compose --project-directory "$here" "${files[@]}" "$@"
 }
 

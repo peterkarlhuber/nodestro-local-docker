@@ -7,6 +7,7 @@
 | `components.json` | The two full commit SHAs an image is built from (nodestro-studio, nodestro-server) |
 | `compose.yaml` | The installation: services `nodestro` and `gateway`, volumes `data` and `sandbox-socket` |
 | `compose.extra-ca.yaml` | Trust a TLS-inspecting proxy's CA (added by the launcher with `NODESTRO_EXTRA_CA_FILE`) |
+| `compose.override.yaml` | Not in the repository: the user's own additions (provider keys, AWS credentials; README), added by the launcher when present |
 | `nodestro`, `nodestro.ps1` | Launchers for Linux/macOS and Windows |
 | `scripts/build-image.sh` | Builds the image: nodestro-server's `image/Dockerfile`, target `local`, at the pinned commits |
 | `scripts/check-pins.sh` | Checks that both SHAs are on master and that the studio's own pins agree |
