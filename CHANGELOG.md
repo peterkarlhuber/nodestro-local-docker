@@ -14,6 +14,8 @@
 - D3: only the published port is answered in `Host`; the documentation said so before, and now the code checks it.
 - The image contains the hardened sandbox gateway of runtime PR #47 (image and connection limits, build queue,
   seccomp check, strict `ca.pem`, digest-pinned base images) and the digest-pinned base images of server PR #7.
+- `components.json` pins studio `66fe676` (before `0609fbb`) and server `bfa2e86` (before `df993bc`): runtime `a13f894`,
+  api `c58d5de`, orkexa `b85133d`.
 - The end-to-end tests check the host name file, sessions under shared names, ports and logout.
 
 ### Sandbox gateway security fixes in the image (2026-10-31)
