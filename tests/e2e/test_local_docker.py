@@ -250,6 +250,20 @@ def test_the_containers_are_locked_down() -> None:
     assert container("nodestro")["Config"]["User"] == "10001:10001"
 
 
+def test_the_aws_sdk_is_in_the_image_but_no_aws_credentials_are() -> None:
+    # Amazon Bedrock: boto3, the provider and botocore's service models (data files) are in the image ...
+    check = (
+        "import boto3, botocore.session, orkexa.providers.bedrock; s = botocore.session.get_session(); "
+        "[s.get_service_model(n) for n in ('bedrock-runtime', 'bedrock', 'sts')]"
+    )
+    compose("exec", "-T", "nodestro", "python", "-I", "-B", "-c", check)
+    # ... but without a compose.override.yaml the container has no AWS credentials (README: model providers).
+    environment = compose("exec", "-T", "nodestro", "env").stdout.decode().splitlines()
+    names = {line.split("=", 1)[0] for line in environment if line.startswith("AWS_")}
+    assert names <= {"AWS_CA_BUNDLE"}, names  # compose.extra-ca.yaml sets the CA bundle, which is not a credential
+    compose("exec", "-T", "nodestro", "sh", "-c", 'test ! -e "$HOME/.aws"')
+
+
 def test_the_access_key_is_private_and_never_logged() -> None:
     mode = compose("exec", "-T", "nodestro", "stat", "-c", "%a %u", "/var/lib/nodestro/secrets/access-key").stdout
     assert mode.decode().split() == ["600", "10001"]
