@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Backend audit fixes (2026-11-01)
+
+- `components.json` pins studio `561c655` (before `66fe676`) and server `5fac3f6` (before `bfa2e86`): runtime `6eacec1`,
+  api `e16202d`, orkexa `6e69b9c`. This brings in the fixes of the 2026-11-01 backend audit: bounded tool output,
+  sandbox cancellation, run fencing and orphan recovery, document locking, health checks that answer 503, log
+  redaction, gzip and cache headers for the frontend, and clearer error codes for model providers.
+- No change to the launcher, the compose file or the sandbox gateway configuration.
+
 ### Browser sessions on a private host name, logout, hardened gateway (2026-10-31)
 
 - The launch link opens the installation's own random host name, `nodestro-<random>.localhost`. Cookies are scoped
