@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Amazon Bedrock branches (branch only, 2026-11-01)
+
+- `components.json` pins studio `b8c6d48` (before `5f96652`) and server `b2f0c3f` (before `ce58ea6`), the Bedrock
+  branches: runtime `ac96c6f`, api `4e2c8cd`, orkexa `3467940` (boto3). Not on master yet, so
+  `scripts/check-pins.sh` refuses them until the coordinated cascade merges.
+
 ### Final UX initiative state (2026-11-01)
 
 - `components.json` pins studio `5f96652` (before `90f08ce`) and server `ce58ea6` (before `a93df72`). Backend pins
