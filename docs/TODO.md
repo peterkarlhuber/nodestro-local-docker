@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-01 against `master` at `b98df28`.
+> **Last full review:** 2026-11-01 against `master` at `29c7693`.
 
 ## Summary
 
@@ -12,8 +12,8 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 8 |
-| P4 Optional | 2 |
+| P3 Low | 7 |
+| P4 Optional | 3 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned. Before any release,
 LD-001 (independent security review) and LD-002 (Docker Desktop tests) must be closed.
@@ -128,12 +128,12 @@ None known beyond the platform items below.
 
 ## Technical debt
 
-### LD-009 · Pin hygiene: merge commits and pin distance
+### LD-009 · Warn when the pinned studio falls behind
 
-- **Priority:** P3 Low · **Status:** Open · **Refs:** `components.json`, backend audit D-01
-- **What:** `components.json` pins studio `b8c6d48` and server `b2f0c3f`, branch heads rather than master merge
-  commits; `scripts/check-pins.sh` checks reachability and agreement, not distance to the latest platform commit.
-- **Next step:** Re-pin to merge commits in the next cascade; add a pin-distance warning.
+- **Priority:** P4 Optional · **Status:** Open · **Refs:** `components.json`, backend audit D-01
+- **What:** `components.json` now pins master merge commits of studio and server (re-pinned with the Live Run Chat cascade), but `scripts/check-pins.sh` checks only
+  reachability and agreement, not how far they lag behind the latest studio platform commit.
+- **Next step:** Add a CI warning for pin distance; keep pinning merge commits in every cascade.
 
 ## Later optimizations
 
@@ -179,7 +179,7 @@ None known beyond the platform items below.
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
 | – | nodestro-server | SRV-003 image vulnerability scan (same image definition, target `local`) | Covers this image |
 | – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
-| LD-009 | nodestro-server, nodestro-desktop | SRV-016, DSK-013 (pins at branch heads) | Re-pin in the same cascade |
+| LD-009 | nodestro-server, nodestro-desktop | SRV-016, DSK-013 (pin distance warning) | Same check in all three |
 
 ## Maintaining this file
 
