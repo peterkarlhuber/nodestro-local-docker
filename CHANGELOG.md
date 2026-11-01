@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Final UX initiative state (2026-11-01)
+
+- `components.json` pins studio `5f96652` (before `90f08ce`) and server `ce58ea6` (before `a93df72`). Backend pins
+  unchanged: runtime `d141b8f`, api `db6a696`, orkexa `6e69b9c`.
+
 ### PostgreSQL read performance, accessibility (2026-11-01)
 
 - `components.json` pins studio `90f08ce` (before `561c655`) and server `a93df72` (before `5fac3f6`): runtime
