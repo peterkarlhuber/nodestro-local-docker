@@ -136,6 +136,7 @@ cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
 - [docs/SECURITY.md](docs/SECURITY.md): the security model, container and sandbox configuration, residual risks
 - [docs/PLATFORMS.md](docs/PLATFORMS.md): what was tested where, and what was not
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): building, testing, pins, CI
+- [docs/TODO.md](docs/TODO.md): open work (known gaps, reviews, platform tests)
 
 ## License
 
