@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Live run chat and steering (LRC-1, 2026-11-01)
+
+- `components.json` pins studio `0055a30` (before `b8c6d48`, merge commit of studio #77) and server `5a4306d`
+  (before `b2f0c3f`, merge commit of server #24): live run chat and steering on top of Amazon Bedrock; runtime
+  `a42b672`, api `fb7f438`, orkexa `3467940`. Both are on master, so `scripts/check-pins.sh` accepts them.
+
 ### Amazon Bedrock branches (branch only, 2026-11-01)
 
 - `components.json` pins studio `b8c6d48` (before `5f96652`) and server `b2f0c3f` (before `ce58ea6`), the Bedrock
