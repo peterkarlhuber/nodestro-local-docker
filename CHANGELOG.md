@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Docker-first follow-up (2026-11-02)
+
+- `components.json` pins studio `139bce3` (before `6351ad3`, merge commit of studio #105) and server `ec0e4ac` (before
+  `c999c64`, merge commit of server #39). Component pins: runtime `958be1d`, api `b8139b0`, examples `8c338d3`,
+  integrations `e71bf55`, orkexa `dec66eb`. For Local Docker this means: source builds of Python libraries are refused
+  (R-1, plans use wheels only), resolve containers are checked against the proven shape (R-5), MCP containers have a
+  15-minute deadline, and adopting AI-created tools is refused (`tool.adoption_desktop_only`, desktop only).
+
 ### Python 3.11 minimum (2026-11-02)
 
 - Python 3.11 is now the minimum (3.10 reached end of life in October 2026): ruff `target-version = "py311"` for the
