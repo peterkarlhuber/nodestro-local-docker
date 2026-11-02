@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Python 3.11 minimum (2026-11-02)
+
+- Python 3.11 is now the minimum (3.10 reached end of life in October 2026): ruff `target-version = "py311"` for the
+  test code; the image already runs 3.13.
+- `components.json` pins studio `6351ad3` (before `d2724c2`, merge commit of studio #103) and server `c999c64`
+  (before `1a5febb`, merge commit of server #38). Component pins: axentra `024da57` (server profile only, not
+  installed here), orkexa `dec66eb`, runtime `51262a2`, api `ef04cb4`; with the security review fixes of the Axentra
+  migration completion (studio #102, server #36) and Python 3.11 as the minimum.
+
 ### Run budget decisions and the unified Docker sandbox (2026-11-02)
 
 - `components.json` pins studio `d2724c2` (before `bae25eb`, merge commit of studio #101) and server `1a5febb`
