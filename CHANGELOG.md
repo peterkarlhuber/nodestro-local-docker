@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### macOS build fix (2026-11-02)
+
+- `components.json` pins studio `bae25eb` (before `0055a30`, merge commit of studio #89) and server `4a733cf`
+  (before `5a4306d`, merge commit of server #31): the studio frontend component `automation/TestStatus.tsx` is
+  renamed to `WorkflowTestStatus.tsx`, so it builds on case-insensitive file systems (macOS). Component pins
+  unchanged (runtime `a42b672`, api `fb7f438`, orkexa `3467940`).
+
 ### Live run chat and steering (LRC-1, 2026-11-01)
 
 - `components.json` pins studio `0055a30` (before `b8c6d48`, merge commit of studio #77) and server `5a4306d`
