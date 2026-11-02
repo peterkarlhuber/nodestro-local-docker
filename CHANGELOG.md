@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Run budget decisions and the unified Docker sandbox (2026-11-02)
+
+- `components.json` pins studio `d2724c2` (before `bae25eb`, merge commit of studio #101) and server `1a5febb`
+  (before `4a733cf`, merge commit of server #35): attended runs pause for a budget decision (BUDGET-1) and the
+  unified Docker sandbox (preflight and self-test). Component pins: runtime `bf9af7d`, api `dde77f5`, orkexa `3364fb8`.
+
 ### macOS build fix (2026-11-02)
 
 - `components.json` pins studio `bae25eb` (before `0055a30`, merge commit of studio #89) and server `4a733cf`
