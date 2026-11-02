@@ -423,7 +423,10 @@ def test_tool_code_runs_only_in_locked_down_sandbox_containers() -> None:
     done = wait_for(finished, timeout=600, what="the tool run")
     assert done["status"] == "succeeded" and done["output"] == "tool said: IN A RUN!", done
     started = _sandbox_containers(since)
-    assert len(started) >= 3 and all(name.startswith("nodestro-sandbox-") for name in started), started
+    # Tool code runs in Orkexa's containers (``orkexa-sandbox-*``) since the runtime uses Orkexa's run shape;
+    # ``nodestro-sandbox-*`` are the runtime's own (dependency checks). Both carry this installation's label.
+    prefixes = ("orkexa-sandbox-", "nodestro-sandbox-")
+    assert len(started) >= 3 and all(name.startswith(prefixes) for name in started), started
     images = docker("images", "--format", "{{.Repository}}:{{.Tag}}").stdout.split()
     assert any(re.fullmatch(r"nodestro-env:[0-9a-f]{32}", image) for image in images), images
 
