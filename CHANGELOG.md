@@ -4,6 +4,10 @@
 
 ### Backend audit round 2 pins (2026-11-03)
 
+- `components.json` pins studio `b7c8af2` (merge commit of studio #111, UX round: frontend only, the backend pins of
+  `997f485` are unchanged) and server `8b4ae82` (merge commit of server #43: PostgreSQL upgrade test in CI, no change
+  to the shared image definition). All three products now build from the same studio commit.
+
 - `components.json` pins studio `997f485` (before `83d8998`, merge commit of studio #110) and server `f840285` (before
   `1f8e14b`, merge commit of server #42, which contains server #41: no pip in the image, digest-pinned base images).
   Component pins: runtime `140d479`, api `84ca99d`, examples `8499edf`, integrations `e2582cc`, orkexa `bc8c4ed`,
