@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The `ollama` container gets `OLLAMA_CONTEXT_LENGTH=32768` (override with `NODESTRO_OLLAMA_CONTEXT_LENGTH`). Ollama's
+  default without a large GPU is 4096 tokens for prompt, thinking and answer together, and local agents ran out of
+  it long before their `max_tokens`.
+- `components.json` pins studio `97564f4` (studio #115: nodestro-runtime `90ba97b`, nodestro-api `a24f32b`, orkexa
+  `71f8aaf`: the local model features, European catalog entries and the "prefer European models" setting, the
+  optional mDenseOn embedding build) and server `8254cac` (server #47: the same studio pin; restores drop the newer
+  release's tables in the same transaction). The local model features are now active in the studio container.
+
 ### Local model server (2026-11-03)
 
 - New container `ollama`: Ollama 0.40.14, the official `ollama/ollama` image pinned by the digest of its
