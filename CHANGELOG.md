@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Nodestro–Axentra migration close-out (2026-11-03)
+
+- `components.json` pins studio `83d8998` (before `139bce3`, merge commit of studio #107) and server `1f8e14b` (before
+  `ec0e4ac`, merge commit of server #40). Component pins: runtime `bcfea7f`, api `f21fd6a`, examples `9dd0c1a`,
+  integrations `b3c7c90`, orkexa `0861c1b`, Axentra `2767a2e` (server profile only). No changes in this repository.
+
 ### Docker-first follow-up (2026-11-02)
 
 - `components.json` pins studio `139bce3` (before `6351ad3`, merge commit of studio #105) and server `ec0e4ac` (before
