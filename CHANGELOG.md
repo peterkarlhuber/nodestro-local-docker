@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `components.json` pins studio `74a9aa6` (studio #117: nodestro-runtime `3006ce0`, nodestro-api `c2a2ad3`, orkexa
+  `4ec738c`: the CPU saving mode for thinking models, hardware and context window advice with a speed measurement,
+  building mDenseOn from local files, per-agent local models when copying an example, robust hybrid knowledge search)
+  and server `7c3703e` (server #48: the same studio pin). The `nodestro` service gets the same
+  `NODESTRO_OLLAMA_CONTEXT_LENGTH` as the `ollama` service, so the local models overview names the context window as
+  set by Nodestro instead of "unknown".
+
 - The `ollama` container gets `OLLAMA_CONTEXT_LENGTH=32768` (override with `NODESTRO_OLLAMA_CONTEXT_LENGTH`). Ollama's
   default without a large GPU is 4096 tokens for prompt, thinking and answer together, and local agents ran out of
   it long before their `max_tokens`.
