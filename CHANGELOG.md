@@ -4,6 +4,9 @@
 
 ### Backend audit round 2 pins (2026-11-03)
 
+- `components.json` pins studio `6e94ae4` (merge commit of studio #112: nodestro-api `7c195ed`, exporting a project
+  works without test tools in the image) and server `ac2ef9a` (merge commit of server #44, the same studio pin).
+
 - `components.json` pins studio `b7c8af2` (merge commit of studio #111, UX round: frontend only, the backend pins of
   `997f485` are unchanged) and server `8b4ae82` (merge commit of server #43: PostgreSQL upgrade test in CI, no change
   to the shared image definition). All three products now build from the same studio commit.
