@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-01 against `master` at `29c7693`.
+> **Last full review:** 2026-11-03 against `master` at `4b7efb5` (backend audit round 2).
 
 ## Summary
 
@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 7 |
+| P3 Low | 6 |
 | P4 Optional | 3 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned. Before any release,
@@ -118,13 +118,6 @@ None known beyond the platform items below.
 - **Next step:** Add the `rootless` job on `ubuntu-24.04-arm`.
 
 ## Documentation
-
-### LD-008 · Stale end-to-end test counts and test table
-
-- **Priority:** P3 Low · **Status:** Open · **Refs:** `docs/PLATFORMS.md`, `docs/DEVELOPMENT.md`
-- **What:** The docs say "all 14 end-to-end tests", but `tests/e2e/test_local_docker.py` has 18; the DEVELOPMENT test
-  table lacks the AWS, session host name, published-port and logout tests.
-- **Next step:** Update both files (or avoid hard-coded counts).
 
 ## Technical debt
 
