@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Backend audit round 2 pins (2026-11-03)
+
+- `components.json` pins studio `997f485` (before `83d8998`, merge commit of studio #110) and server `f840285` (before
+  `1f8e14b`, merge commit of server #42, which contains server #41: no pip in the image, digest-pinned base images).
+  Component pins: runtime `140d479`, api `84ca99d`, examples `8499edf`, integrations `e2582cc`, orkexa `bc8c4ed`,
+  Axentra `a872242` (server profile only). For Local Docker this brings the API's security headers and request body
+  limit, keyset run pages, idempotent run starts and the stricter origin checks, and stops sandbox calls on a
+  timeout or cancel. No changes in this repository.
+
 ### Nodestro–Axentra migration close-out (2026-11-03)
 
 - `components.json` pins studio `83d8998` (before `139bce3`, merge commit of studio #107) and server `1f8e14b` (before
