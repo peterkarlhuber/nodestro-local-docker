@@ -51,9 +51,13 @@ and remove it at the end, volumes included. They take about two to three minutes
 | --- | --- |
 | `test_the_port_is_published_on_the_host_loopback_only` | the only published port is on 127.0.0.1 |
 | `test_the_containers_are_locked_down` | read-only, no capabilities, no-new-privileges, not privileged, studio user 10001, only the gateway has the host socket, gateway without network |
+| `test_the_aws_sdk_is_in_the_image_but_no_aws_credentials_are` | boto3 and the Bedrock provider are in the image, but without a `compose.override.yaml` the container has no `AWS_*` credential variables and no `~/.aws` |
 | `test_the_access_key_is_private_and_never_logged` | key file 0600 and owned by the studio user, not in any log or container setting |
 | `test_without_the_key_only_health_answers` | 401 / sign-in page without a session |
 | `test_the_link_opens_a_session_and_scripts_use_the_key` | launch link gives a browser session, scripts use `Authorization: Bearer` |
+| `test_browser_sessions_exist_only_under_the_installation_s_host_name` | the launch link opens no session on `127.0.0.1` or `localhost` (`access.launch_host`), and a session cookie sent there is refused |
+| `test_only_the_published_port_is_answered` | a `Host` with another port gets 403 `request.port_not_allowed` |
+| `test_logout_ends_the_session_and_the_launcher_ends_all` | `/api/logout` ends one session (not from another origin), `./nodestro logout` ends all |
 | `test_foreign_host_names_and_origins_are_refused` | DNS rebinding (Host), another localhost port as Origin, `Origin: null` |
 | `test_other_containers_cannot_use_the_studio_through_its_address` | a container on the same Docker network gets 403 |
 | `test_network_access_for_published_apis_cannot_be_switched_on` | `lan.unavailable` |
