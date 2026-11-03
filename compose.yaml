@@ -116,6 +116,9 @@ services:
       OLLAMA_MODELS: /models
       # No ollama.com cloud models or account features; the studio only ever uses local models here.
       OLLAMA_NO_CLOUD: "1"
+      # Ollama's default without a large GPU is 4096 tokens for prompt, thinking and answer together: too small for
+      # agents. 32768 matches the studio's managed server (nodestro-runtime docs/local-models.md, "Context window").
+      OLLAMA_CONTEXT_LENGTH: ${NODESTRO_OLLAMA_CONTEXT_LENGTH:-32768}
       # Ollama keeps a key pair in $HOME/.ollama; it is used for nothing here, so it lives in memory only.
       HOME: /tmp
     # `models`: the studio's internal network (no internet). `models-egress`: Ollama's own way out, for model

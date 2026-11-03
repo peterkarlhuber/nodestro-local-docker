@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The `ollama` container gets `OLLAMA_CONTEXT_LENGTH=32768` (override with `NODESTRO_OLLAMA_CONTEXT_LENGTH`). Ollama's
+  default without a large GPU is 4096 tokens for prompt, thinking and answer together, and local agents ran out of
+  it long before their `max_tokens`.
+
 ### Local model server (2026-11-03)
 
 - New container `ollama`: Ollama 0.40.14, the official `ollama/ollama` image pinned by the digest of its

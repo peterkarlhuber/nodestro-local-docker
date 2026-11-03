@@ -9,7 +9,7 @@ covers the container setup.
 
 | Container | What it does | Configuration |
 | --- | --- | --- |
-| `ollama` | Ollama 0.40.14, the official `ollama/ollama` image pinned by the digest of its multi-platform index (linux/amd64, linux/arm64) | User 10001, read-only root, no capabilities, `no-new-privileges`, tmpfs `/tmp` (also its `$HOME`), `OLLAMA_NO_CLOUD=1` |
+| `ollama` | Ollama 0.40.14, the official `ollama/ollama` image pinned by the digest of its multi-platform index (linux/amd64, linux/arm64) | User 10001, read-only root, no capabilities, `no-new-privileges`, tmpfs `/tmp` (also its `$HOME`), `OLLAMA_NO_CLOUD=1`, `OLLAMA_CONTEXT_LENGTH=32768` (`NODESTRO_OLLAMA_CONTEXT_LENGTH`; Ollama's 4096-token default is too small for agents) |
 | `models-init` | Hands the volume `models` to user 10001, then exits | Root with `CAP_CHOWN` only, no network, read-only |
 | `nodestro` | The studio; manages the models through Ollama's API | `NODESTRO_OLLAMA_URL=http://ollama:11434`, `NODESTRO_OLLAMA_MODELS_DIR=/var/lib/nodestro-models` |
 
