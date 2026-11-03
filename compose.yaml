@@ -70,6 +70,8 @@ services:
       # The local model server and its model folder (nodestro-runtime docs/local-models.md, profile local-container).
       NODESTRO_OLLAMA_URL: http://ollama:11434
       NODESTRO_OLLAMA_MODELS_DIR: /var/lib/nodestro-models
+      # The context window the ollama service starts with (below), so Studio shows and checks the same value.
+      NODESTRO_OLLAMA_CONTEXT_LENGTH: ${NODESTRO_OLLAMA_CONTEXT_LENGTH:-32768}
     networks: [default, models]
     ports:
       - "127.0.0.1:${NODESTRO_PORT:-8765}:8080"
