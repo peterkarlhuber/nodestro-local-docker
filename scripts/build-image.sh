@@ -5,6 +5,8 @@
 #   scripts/build-image.sh [TAG]            (default: nodestro-local:<studio>-<server>, also tagged nodestro-local:dev)
 #
 # No token is needed: the Nodestro and Orkexa repositories are public. Options (environment):
+#   NODESTRO_COMPONENTS     another pin file instead of components.json (the upgrade test builds the previous image
+#                           from tests/upgrade-from.json); such a build is never tagged nodestro-local:dev
 #   NODESTRO_PLATFORM       e.g. linux/arm64 (default: the Docker host's platform)
 #   NODESTRO_EXTRA_CA_FILE  certificate bundle of a TLS-inspecting proxy (BuildKit secret `build_ca`, never a layer)
 #   NODESTRO_BUILD_NETWORK  build network, e.g. host
@@ -13,7 +15,8 @@
 #   NODESTRO_SERVER_SOURCE  development only: a local nodestro-server checkout instead of the pinned commit
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-read_pin() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$root/components.json" "$1"; }
+components="${NODESTRO_COMPONENTS:-$root/components.json}"
+read_pin() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$components" "$1"; }
 studio="$(read_pin nodestro-studio)"
 server="$(read_pin nodestro-server)"
 for sha in "$studio" "$server"; do
@@ -53,5 +56,7 @@ if [ -n "${NODESTRO_OVERRIDES:-}" ]; then
   args+=(--build-context "overrides=$NODESTRO_OVERRIDES")
 fi
 docker buildx build "${args[@]}" "$context"
-if [ "$tag" != "nodestro-local:dev" ] && [ -z "${NODESTRO_PLATFORM:-}" ]; then docker tag "$tag" nodestro-local:dev; fi
+if [ "$tag" != "nodestro-local:dev" ] && [ -z "${NODESTRO_PLATFORM:-}" ] && [ -z "${NODESTRO_COMPONENTS:-}" ]; then
+  docker tag "$tag" nodestro-local:dev
+fi
 echo "$tag"

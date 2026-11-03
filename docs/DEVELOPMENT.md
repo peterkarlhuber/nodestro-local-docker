@@ -68,6 +68,17 @@ and remove it at the end, volumes included. They take about two to three minutes
 | `test_backup_and_restore_through_the_launcher` | `./nodestro backup`, delete, `./nodestro restore` |
 | `test_update_and_rollback_keep_the_data` | `./nodestro update` to another image and `./nodestro rollback` |
 
+`tests/e2e/test_upgrade.py` (skipped in the run above) upgrades a real installation of an older image: the image of
+the previous pins in `tests/upgrade-from.json` with data is updated to the current image, a backup written by the old
+version is restored by the new one, and `./nodestro rollback` returns to the old image with its data:
+
+```sh
+NODESTRO_COMPONENTS=tests/upgrade-from.json scripts/build-image.sh nodestro-local:upgrade-from
+scripts/build-image.sh
+NODESTRO_IMAGE=nodestro-local:upgrade-from NODESTRO_UPGRADE_TO=nodestro-local:dev \
+  .venv/bin/python -m pytest tests/e2e/test_upgrade.py -v
+```
+
 What code inside a sandbox container can reach (network, files, users, limits) is tested where the gateway lives:
 nodestro-runtime `tests/test_sandbox_gateway.py` (`NODESTRO_DOCKER_TESTS=1` for the real-Docker test).
 
@@ -91,13 +102,17 @@ scripts/check-pins.sh
   secret scan, and the manifest with license inventory as an artifact. Nothing is pushed to a registry and nothing
   is released.
 
+`.github/workflows/upgrade.yml` runs `tests/e2e/test_upgrade.py` (two image builds, so not on every pull request): on
+pull requests and pushes that change the pins or the test, weekly, and on demand.
+
 ## Moving the pins
 
 1. Merge the component change and cascade the pins as usual: runtime, examples and integrations, api, sdk, studio
    (`scripts/check_versions.py` in the studio must report that the pins agree).
 2. If the image definition changed, merge it in nodestro-server.
 3. Set both SHAs in `components.json` (merge commits on master) and open a pull request. CI builds and tests the
-   image on both architectures.
+   image on both architectures. The upgrade workflow upgrades an installation of `tests/upgrade-from.json`'s image to it; move
+   that file forward only to pins that users really have installed (a release), never to the new ones.
 
 ## Known build details
 
