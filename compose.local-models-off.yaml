@@ -1,0 +1,11 @@
+# NODESTRO_LOCAL_MODELS=off: Nodestro without the local model server (the launcher adds this file). The studio then
+# uses cloud providers or a model server you name yourself (the Ollama provider's base URL).
+services:
+  nodestro:
+    environment:
+      NODESTRO_OLLAMA_URL: ""
+      NODESTRO_OLLAMA_MODELS_DIR: ""
+  ollama:
+    scale: 0
+  models-init:
+    scale: 0

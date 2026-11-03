@@ -43,16 +43,29 @@ Settings (environment variables):
   NODESTRO_UPDATE_IMAGE       Image for update (default: build from the pinned sources)
   NODESTRO_PROJECT            Compose project name (default nodestro-local)
   NODESTRO_STATE_DIR          Where the launcher keeps its state (default .nodestro next to it)
+  NODESTRO_LOCAL_MODELS       on (default): local model server; offline: without internet (offline imports only);
+                              off: none. Remembered until you set it again
+  NODESTRO_IMPORT_DIR         Folder for offline model imports, /import in the studio (default: import next to this)
 USAGE
 }
 fail() { printf 'Nodestro: %s\n' "$*" >&2; exit 1; }
 
 load_state() {
+  local chosen_models="${NODESTRO_LOCAL_MODELS:-}"
   if [ -f "$state" ]; then
     # shellcheck disable=SC1090
     . "$state"
   fi
   export NODESTRO_IMAGE="${NODESTRO_IMAGE:-nodestro-local:dev}"
+  # A value set now wins over the remembered one, and is remembered from now on.
+  NODESTRO_LOCAL_MODELS="${chosen_models:-${NODESTRO_LOCAL_MODELS:-on}}"
+  case "$NODESTRO_LOCAL_MODELS" in
+    on|off|offline) ;;
+    *) fail "NODESTRO_LOCAL_MODELS must be on, off or offline (not $NODESTRO_LOCAL_MODELS)." ;;
+  esac
+  if [ -n "$chosen_models" ]; then save_state; fi
+  # The folder for offline model imports; created here so that Docker does not create it as root.
+  if [ -z "${NODESTRO_IMPORT_DIR:-}" ]; then mkdir -p "$here/import" 2>/dev/null || true; fi
 }
 
 save_state() {
@@ -60,12 +73,17 @@ save_state() {
   {
     printf 'NODESTRO_IMAGE=%q\n' "$NODESTRO_IMAGE"
     printf 'NODESTRO_PREVIOUS_IMAGE=%q\n' "${NODESTRO_PREVIOUS_IMAGE:-}"
+    printf 'NODESTRO_LOCAL_MODELS=%q\n' "${NODESTRO_LOCAL_MODELS:-on}"
   } > "$state"
 }
 
 compose() {
   local files=(-f "$here/compose.yaml")
   if [ -n "${NODESTRO_EXTRA_CA_FILE:-}" ]; then files+=(-f "$here/compose.extra-ca.yaml"); fi
+  case "${NODESTRO_LOCAL_MODELS:-on}" in
+    off) files+=(-f "$here/compose.local-models-off.yaml") ;;
+    offline) files+=(-f "$here/compose.local-models-offline.yaml") ;;
+  esac
   # The user's own additions (README: model providers), as plain `docker compose` would read them.
   if [ -f "$here/compose.override.yaml" ]; then files+=(-f "$here/compose.override.yaml"); fi
   docker compose --project-directory "$here" "${files[@]}" "$@"
@@ -138,6 +156,13 @@ start() {
   require_docker
   load_state
   require_image
+  local models_image
+  if [ "$NODESTRO_LOCAL_MODELS" != off ]; then
+    models_image="$(compose config --images 2>/dev/null | grep -m 1 '/ollama@' || true)"
+    if [ -n "$models_image" ] && ! docker image inspect "$models_image" >/dev/null 2>&1; then
+      say "Downloading the local model server (Ollama, about 3.4 GB on amd64, once; NODESTRO_LOCAL_MODELS=off skips it)..."
+    fi
+  fi
   say "Starting Nodestro (image $NODESTRO_IMAGE, port $NODESTRO_PORT on 127.0.0.1)..."
   if ! compose up -d --wait --wait-timeout 300; then
     compose ps || true

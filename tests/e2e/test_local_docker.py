@@ -348,7 +348,7 @@ def test_foreign_host_names_and_origins_are_refused() -> None:
 
 
 def test_other_containers_cannot_use_the_studio_through_its_address() -> None:
-    address = next(iter(container("nodestro")["NetworkSettings"]["Networks"].values()))["IPAddress"]
+    address = container("nodestro")["NetworkSettings"]["Networks"][f"{PROJECT}_default"]["IPAddress"]
     script = (
         "import urllib.request, urllib.error\n"
         f"r = urllib.request.Request('http://{address}:8080/api/workflows')\n"
@@ -357,6 +357,58 @@ def test_other_containers_cannot_use_the_studio_through_its_address() -> None:
     )
     found = compose("exec", "-T", "model-stub", "python", "-c", script).stdout.decode().strip()
     assert found == "403"  # its address is not a loopback name (and it has no key)
+
+
+# ---- the local model server -----------------------------------------------------------------------------------------
+
+
+def test_the_local_model_server_is_pinned_and_locked_down() -> None:
+    ollama = container("ollama")
+    assert re.fullmatch(r"docker\.io/ollama/ollama@sha256:[0-9a-f]{64}", ollama["Config"]["Image"])
+    assert ollama["Config"]["User"] == "10001:10001"
+    host = ollama["HostConfig"]
+    assert host["ReadonlyRootfs"] is True and host["Privileged"] is False
+    assert host["CapDrop"] == ["ALL"] and not host["CapAdd"]
+    assert "no-new-privileges:true" in host["SecurityOpt"]
+    # The image exposes 11434, but nothing is published on the host.
+    assert all(binding is None for binding in ollama["NetworkSettings"]["Ports"].values())
+    assert not ollama["HostConfig"]["PortBindings"]
+    env = dict(item.split("=", 1) for item in ollama["Config"]["Env"])
+    assert env["OLLAMA_NO_CLOUD"] == "1" and env["OLLAMA_MODELS"] == "/models"
+    assert "/var/run/docker.sock" not in {mount["Destination"] for mount in ollama["Mounts"]}
+    version = compose("exec", "-T", "ollama", "ollama", "--version").stdout.decode()
+    assert "0.40.14" in version, version
+
+
+def test_only_the_studio_reaches_the_model_server_on_an_internal_network() -> None:
+    networks = set(container("ollama")["NetworkSettings"]["Networks"])
+    assert networks == {f"{PROJECT}_models", f"{PROJECT}_models-egress"}
+    assert f"{PROJECT}_models" in container("nodestro")["NetworkSettings"]["Networks"]
+    assert json.loads(docker("network", "inspect", f"{PROJECT}_models").stdout)[0]["Internal"] is True
+    env = dict(item.split("=", 1) for item in container("nodestro")["Config"]["Env"])
+    assert env["NODESTRO_OLLAMA_URL"] == "http://ollama:11434"
+    assert env["NODESTRO_OLLAMA_MODELS_DIR"] == "/var/lib/nodestro-models"
+    fetch = (
+        "import json, urllib.request; "
+        "print(json.load(urllib.request.urlopen('http://ollama:11434/api/version', timeout=10))['version'])"
+    )
+    assert compose("exec", "-T", "nodestro", "python", "-I", "-c", fetch).stdout.decode().strip() == "0.40.14"
+    # Another container on the project's default network (the model stub) does not even find it.
+    found = compose("exec", "-T", "model-stub", "python", "-I", "-c", fetch, check=False)
+    assert found.returncode != 0
+
+
+def test_the_studio_shares_the_model_folder_and_reads_the_import_folder() -> None:
+    probe = "/var/lib/nodestro-models/e2e-probe"
+    compose("exec", "-T", "nodestro", "python", "-I", "-c", f"open({probe!r}, 'w').write('shared')")
+    try:
+        seen = compose("exec", "-T", "ollama", "cat", "/models/e2e-probe").stdout.decode()
+        assert seen == "shared"
+    finally:
+        compose("exec", "-T", "nodestro", "rm", "-f", probe, check=False)
+    imports = {mount["Destination"]: mount for mount in container("nodestro")["Mounts"]}
+    assert imports["/import"]["RW"] is False
+    assert (ROOT / "import").is_dir()  # created by the launcher, not by Docker as root
 
 
 def test_network_access_for_published_apis_cannot_be_switched_on() -> None:

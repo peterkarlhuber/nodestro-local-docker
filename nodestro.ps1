@@ -34,6 +34,9 @@ Settings (environment variables):
   NODESTRO_UPDATE_IMAGE       Image for update (default: build from the pinned sources)
   NODESTRO_PROJECT            Compose project name (default nodestro-local)
   NODESTRO_STATE_DIR          Where the launcher keeps its state (default .nodestro next to it)
+  NODESTRO_LOCAL_MODELS       on (default): local model server; offline: without internet (offline imports only);
+                              off: none. Remembered until you set it again
+  NODESTRO_IMPORT_DIR         Folder for offline model imports, /import in the studio (default: import next to this)
 '@
 $Command = if ($args.Count -gt 0) { [string]$args[0] } else { "help" }
 $Rest = @(if ($args.Count -gt 1) { $args[1..($args.Count - 1)] | ForEach-Object { [string]$_ } })
@@ -55,23 +58,37 @@ function Test-Native([scriptblock]$Block) {
 }
 
 function Load-State {
+    $chosenModels = $env:NODESTRO_LOCAL_MODELS
     if (Test-Path $StateFile) {
         foreach ($line in Get-Content $StateFile) {
             if ($line -match '^NODESTRO_IMAGE=(.+)$') { $env:NODESTRO_IMAGE = $Matches[1].Trim("'", '"') }
             if ($line -match '^NODESTRO_PREVIOUS_IMAGE=(.*)$') { $env:NODESTRO_PREVIOUS_IMAGE = $Matches[1].Trim("'", '"') }
+            if ($line -match '^NODESTRO_LOCAL_MODELS=(.+)$') { $env:NODESTRO_LOCAL_MODELS = $Matches[1].Trim("'", '"') }
         }
     }
     if (-not $env:NODESTRO_IMAGE) { $env:NODESTRO_IMAGE = "nodestro-local:dev" }
+    # A value set now wins over the remembered one, and is remembered from now on.
+    if ($chosenModels) { $env:NODESTRO_LOCAL_MODELS = $chosenModels }
+    if (-not $env:NODESTRO_LOCAL_MODELS) { $env:NODESTRO_LOCAL_MODELS = "on" }
+    if (@("on", "off", "offline") -notcontains $env:NODESTRO_LOCAL_MODELS) {
+        Fail "NODESTRO_LOCAL_MODELS must be on, off or offline (not $($env:NODESTRO_LOCAL_MODELS))."
+    }
+    if ($chosenModels) { Save-State }
+    # The folder for offline model imports; created here so that Docker does not create it itself.
+    if (-not $env:NODESTRO_IMPORT_DIR) { New-Item -ItemType Directory -Force -Path (Join-Path $Here "import") | Out-Null }
 }
 
 function Save-State {
     New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
-    Set-Content -Path $StateFile -Value @("NODESTRO_IMAGE=$($env:NODESTRO_IMAGE)", "NODESTRO_PREVIOUS_IMAGE=$($env:NODESTRO_PREVIOUS_IMAGE)") -Encoding ascii
+    $models = if ($env:NODESTRO_LOCAL_MODELS) { $env:NODESTRO_LOCAL_MODELS } else { "on" }
+    Set-Content -Path $StateFile -Value @("NODESTRO_IMAGE=$($env:NODESTRO_IMAGE)", "NODESTRO_PREVIOUS_IMAGE=$($env:NODESTRO_PREVIOUS_IMAGE)", "NODESTRO_LOCAL_MODELS=$models") -Encoding ascii
 }
 
 function Invoke-Compose {
     $files = @("-f", (Join-Path $Here "compose.yaml"))
     if ($env:NODESTRO_EXTRA_CA_FILE) { $files += @("-f", (Join-Path $Here "compose.extra-ca.yaml")) }
+    if ($env:NODESTRO_LOCAL_MODELS -eq "off") { $files += @("-f", (Join-Path $Here "compose.local-models-off.yaml")) }
+    if ($env:NODESTRO_LOCAL_MODELS -eq "offline") { $files += @("-f", (Join-Path $Here "compose.local-models-offline.yaml")) }
     # The user's own additions (README: model providers), as plain `docker compose` would read them.
     $override = Join-Path $Here "compose.override.yaml"
     if (Test-Path -LiteralPath $override -PathType Leaf) { $files += @("-f", $override) }
@@ -118,6 +135,9 @@ function Open-Browser {
 function Start-Nodestro {
     Require-Docker; Load-State
     if (-not (Test-Native { docker image inspect $env:NODESTRO_IMAGE })) { Write-Host "Building the Nodestro image from source (several minutes, once)..."; Build-Image }
+    if ($env:NODESTRO_LOCAL_MODELS -ne "off") {
+        Write-Host "The first start downloads the local model server (Ollama, about 3.4 GB, once; NODESTRO_LOCAL_MODELS=off skips it)."
+    }
     Write-Host "Starting Nodestro (image $($env:NODESTRO_IMAGE), port $($env:NODESTRO_PORT) on 127.0.0.1)..."
     try { Invoke-Compose up -d --wait --wait-timeout 300 }
     catch { Invoke-Compose logs --tail 40; Fail "Nodestro did not start. The lines above say why (a port in use: set NODESTRO_PORT)." }

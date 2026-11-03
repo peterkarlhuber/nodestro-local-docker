@@ -1,0 +1,6 @@
+# NODESTRO_LOCAL_MODELS=offline: the local model server without internet access (the launcher adds this file). Models
+# come only from offline imports (docs/LOCAL-MODELS.md); downloads in the studio fail. Combine with the studio's
+# strict offline mode for an installation that uses no external model service at all.
+services:
+  ollama:
+    networks: !override [models]
