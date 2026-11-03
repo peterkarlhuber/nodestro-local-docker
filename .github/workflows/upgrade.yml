@@ -1,0 +1,60 @@
+# A real upgrade (tests/e2e/test_upgrade.py): the image of the previous pins (tests/upgrade-from.json) with data is
+# updated to the image of components.json, an old backup is restored, and the rollback is checked. Two image builds
+# make it too slow for every pull request: it runs when the pins or the test change, weekly, and on demand.
+# Publishes nothing; no token (the Nodestro and Orkexa repositories are public).
+name: upgrade
+
+on:
+  pull_request:
+    paths:
+      - components.json
+      - tests/upgrade-from.json
+      - tests/e2e/test_upgrade.py
+      - scripts/build-image.sh
+      - compose.yaml
+      - nodestro
+      - .github/workflows/upgrade.yml
+  push:
+    branches: [master]
+    paths:
+      - components.json
+      - tests/upgrade-from.json
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the previous image (tests/upgrade-from.json)
+        env:
+          NODESTRO_COMPONENTS: tests/upgrade-from.json
+        run: scripts/build-image.sh nodestro-local:upgrade-from | tee build-previous.log
+      - name: Build the current image (components.json)
+        run: scripts/build-image.sh | tee build-current.log
+      - name: Upgrade, old backup restore and rollback
+        env:
+          NODESTRO_IMAGE: nodestro-local:upgrade-from
+          NODESTRO_UPGRADE_TO: nodestro-local:dev
+        run: |
+          python3 -m venv /tmp/venv
+          /tmp/venv/bin/pip install -q pytest==8.4.2
+          /tmp/venv/bin/python -m pytest tests/e2e/test_upgrade.py -v -p no:cacheprovider
+      - name: Logs of the installation
+        if: failure()
+        run: cat "${RUNNER_TEMP:-/tmp}/nodestro-e2e.log" /tmp/nodestro-e2e.log 2>/dev/null || true
+      - name: Leftovers
+        if: always()
+        run: docker ps -a --filter label=dev.nodestro.sandbox --format '{{.ID}} {{.Names}} {{.Status}}'
