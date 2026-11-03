@@ -370,7 +370,9 @@ def test_the_local_model_server_is_pinned_and_locked_down() -> None:
     assert host["ReadonlyRootfs"] is True and host["Privileged"] is False
     assert host["CapDrop"] == ["ALL"] and not host["CapAdd"]
     assert "no-new-privileges:true" in host["SecurityOpt"]
-    assert ollama["NetworkSettings"]["Ports"] == {}  # no published port
+    # The image exposes 11434, but nothing is published on the host.
+    assert all(binding is None for binding in ollama["NetworkSettings"]["Ports"].values())
+    assert not ollama["HostConfig"]["PortBindings"]
     env = dict(item.split("=", 1) for item in ollama["Config"]["Env"])
     assert env["OLLAMA_NO_CLOUD"] == "1" and env["OLLAMA_MODELS"] == "/models"
     assert "/var/run/docker.sock" not in {mount["Destination"] for mount in ollama["Mounts"]}
