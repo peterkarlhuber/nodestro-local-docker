@@ -5,12 +5,12 @@ listed as untested when no test environment was available, even if it is expecte
 
 | Platform | Image | Status | Evidence |
 | --- | --- | --- | --- |
-| Linux x86_64, Docker Engine | linux/amd64 | **Tested** | Build plus all 14 end-to-end tests, secret scan and manifest. Development machine: Ubuntu 24.04, Docker 29.9.2, compose 5.6.1, kernel 6.18. CI `image (linux-amd64)` on GitHub's `ubuntu-24.04` runner. |
-| Linux arm64, Docker Engine | linux/arm64 | **Tested** | Native build, no emulation, plus all 14 end-to-end tests, secret scan and manifest (214 packages, all with a license). CI `image (linux-arm64)` on GitHub's `ubuntu-24.04-arm` runner (aarch64, Docker 28.0.4, compose 2.38.2). First run: 2026-10-31. |
+| Linux x86_64, Docker Engine | linux/amd64 | **Tested** | Build plus all end-to-end tests, secret scan and manifest. Development machine: Ubuntu 24.04, Docker 29.9.2, compose 5.6.1, kernel 6.18. CI `image (linux-amd64)` on GitHub's `ubuntu-24.04` runner. |
+| Linux arm64, Docker Engine | linux/arm64 | **Tested** | Native build, no emulation, plus all end-to-end tests, secret scan and manifest (214 packages, all with a license). CI `image (linux-arm64)` on GitHub's `ubuntu-24.04-arm` runner (aarch64, Docker 28.0.4, compose 2.38.2). First run: 2026-10-31. |
 | Windows 11, Docker Desktop (WSL 2) | linux/amd64 | **Untested** | On Windows itself only `help` runs in CI (`windows-launcher`: Windows PowerShell 5.1 and PowerShell 7, on Windows Server 2025). Windows runners have no Linux containers, and no Windows 11 machine with Docker Desktop was available. The launcher's Docker commands pass the end-to-end tests with PowerShell 7 on Linux, which says nothing about Docker Desktop. |
 | macOS Apple Silicon, Docker Desktop | linux/arm64 | **Untested** | No Mac was available. The arm64 image is the one tested on Linux arm64. |
 | macOS Intel, Docker Desktop | linux/amd64 | **Untested** | No Mac was available. |
-| Linux x86_64, rootless Docker (cgroup v2) | linux/amd64 | **Tested, recommended** | All 14 end-to-end tests on rootless Docker 28 with systemd and cgroup v2 delegation (memory, CPU, processes), CI job `rootless` on `ubuntu-24.04`. First run: 2026-10-31. The launcher finds the socket itself. See [Rootless Docker](#rootless-docker). |
+| Linux x86_64, rootless Docker (cgroup v2) | linux/amd64 | **Tested, recommended** | All end-to-end tests on rootless Docker 28 with systemd and cgroup v2 delegation (memory, CPU, processes), CI job `rootless` on `ubuntu-24.04`. First run: 2026-10-31. The launcher finds the socket itself. See [Rootless Docker](#rootless-docker). |
 | Linux, rootless Docker without cgroup v2 | either | **Refused** | The daemon drops memory, CPU and process limits there (cgroup v1, or no systemd user session). Since nodestro-runtime #37 the gateway refuses to start tool code on such a daemon. Development machine (cgroup v1): the studio runs, tools are blocked. |
 | Linux arm64, rootless Docker | linux/arm64 | **Untested** | Expected to behave like x86_64; no CI job yet. |
 | Podman, other engines | | **Not supported** | The gateway speaks the Docker Engine API of a Docker daemon. |

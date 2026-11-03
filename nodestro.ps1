@@ -4,6 +4,37 @@
 #                  update | rollback | build | rotate-key | uninstall [--delete-data] | help
 #
 # No param block: arguments such as --delete-data reach the script as they are typed.
+$Usage = @'
+Nodestro Local Docker launcher for Windows with Docker Desktop (Linux and macOS: ./nodestro). Needs Docker; build
+also needs git.
+
+Usage: .\nodestro.ps1 COMMAND
+
+  start                       Start Nodestro (builds the image on first use) and open the studio
+  stop                        Stop it; the data is kept
+  restart                     Restart it and open the studio
+  status                      Show the containers and whether Nodestro runs
+  open                        Open the studio in the browser
+  link                        Print the sign-in link (it contains the access key: keep it private)
+  logout                      End every browser session
+  logs                        Show the last log lines (200)
+  backup [FILE]               Write a backup (default: backups/nodestro-backup-<time>.zip)
+  restore FILE                Restore a backup
+  update                      Back up, then switch to a new image; rolls back by itself if it does not start
+  rollback                    Return to the image and the data from before the last update
+  build                       Build the image from the pinned sources (needs git)
+  rotate-key                  Replace the access key and open the studio with the new one
+  uninstall [--delete-data]   Remove Nodestro; the data volume is kept unless --delete-data
+  help                        This text
+
+Settings (environment variables):
+  NODESTRO_PORT               Port on 127.0.0.1 (default 8765)
+  NODESTRO_NO_BROWSER=1       Print the link instead of opening a browser
+  NODESTRO_EXTRA_CA_FILE      Certificate bundle of a TLS-inspecting proxy
+  NODESTRO_UPDATE_IMAGE       Image for update (default: build from the pinned sources)
+  NODESTRO_PROJECT            Compose project name (default nodestro-local)
+  NODESTRO_STATE_DIR          Where the launcher keeps its state (default .nodestro next to it)
+'@
 $Command = if ($args.Count -gt 0) { [string]$args[0] } else { "help" }
 $Rest = @(if ($args.Count -gt 1) { $args[1..($args.Count - 1)] | ForEach-Object { [string]$_ } })
 $ErrorActionPreference = "Stop"
@@ -212,6 +243,6 @@ switch ($Command) {
         if ($Rest -contains "--delete-data") { Invoke-Compose down -v; Test-Native { docker volume rm (Get-Volume "data-before-update") } | Out-Null; Write-Host "Nodestro and all its data were removed." }
         else { Invoke-Compose down; Write-Host "Nodestro was removed; its data volume is kept." }
     }
-    { $_ -in "help", "-h", "--help" } { Get-Content $PSCommandPath -TotalCount 6 | Select-Object -Skip 1 | ForEach-Object { $_ -replace '^# ?', '' } }
+    { $_ -in "help", "-h", "--help" } { Write-Output $Usage }
     default { Fail "Unknown command $Command (see .\nodestro.ps1 help)" }
 }
