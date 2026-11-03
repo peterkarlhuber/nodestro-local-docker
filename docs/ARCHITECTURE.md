@@ -74,6 +74,8 @@ host browser ──http://nodestro-<random>.localhost:8765──▶ [ nodestro ]
                                             │ host's /var/run/docker.sock
                                             ▼
                                      host Docker daemon ──▶ tool containers (no network, read-only, nobody, limits)
+
+[ nodestro ] ──network `models` (internal, http://ollama:11434)──▶ [ ollama ]  local models, volume `models` (shared)
 ```
 
 - **`nodestro`** container: the image's `nodestro-local serve`. It is the studio, API and runtime of the pinned
@@ -84,7 +86,12 @@ host browser ──http://nodestro-<random>.localhost:8765──▶ [ nodestro ]
   read-only root, with 256 MB and 64 processes. It offers the studio a Docker API socket that only creates
   locked-down tool containers and builds tool environments from Nodestro's own Dockerfile. See
   [SECURITY.md](SECURITY.md).
-- **Volumes**: `data` (everything persistent) and `sandbox-socket` (the gateway's socket, shared with `nodestro`).
+- **`ollama`** container: the local model server, the official Ollama 0.40.14 image pinned by digest, user 10001,
+  read-only, no capabilities, no published port, on the internal network `models` with the studio (and its own
+  network for model downloads). `models-init` hands it the model volume once per start. See
+  [LOCAL-MODELS.md](LOCAL-MODELS.md).
+- **Volumes**: `data` (everything persistent), `sandbox-socket` (the gateway's socket, shared with `nodestro`) and
+  `models` (Ollama's model store, shared with `nodestro` for offline imports).
 - **Launcher**: `nodestro` (bash, Linux and macOS) and `nodestro.ps1` (Windows). They wrap `docker compose` for
   start, stop, status, backup, restore, update and rollback, and open the browser without putting the key on a
   command line.

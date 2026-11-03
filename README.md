@@ -17,7 +17,8 @@ as the server ([nodestro-server](https://github.com/peterkarlhuber/nodestro-serv
 
 - Docker Engine 24 or newer with the compose plugin (Linux), or Docker Desktop (Windows, macOS).
 - git, to build the image (it fetches the pinned sources; no account or token is needed).
-- About 3 GB of disk for the image and the tool environments.
+- About 3 GB of disk for the image and the tool environments, plus about 9 GB for the local model server (the
+  Ollama image) and several GB per local model. Without local models: `NODESTRO_LOCAL_MODELS=off`.
 
 No Python, Node.js, PostgreSQL or Nodestro app on your computer.
 
@@ -102,6 +103,14 @@ your own `~/.aws` files (mode 600) are not readable by it, so use the variables 
 by user 10001. AI-generated tools never see these credentials (they run in separate sandbox containers). Network
 access needed: `bedrock-runtime.<region>`, `bedrock.<region>` and `sts.<region>.amazonaws.com`.
 
+## Local models
+
+Nodestro runs models on your computer without an API key, through a separate Ollama container that only the studio
+can reach (no published port, an internal network). Download or import models in the studio (Settings, local
+models); for computers without internet, put offline packages or GGUF files into the `import` folder next to the
+launcher. `NODESTRO_LOCAL_MODELS=offline` keeps the model server off the internet, `=off` leaves it out. Details,
+hardware and the security setup: [docs/LOCAL-MODELS.md](docs/LOCAL-MODELS.md).
+
 ## AI-generated tools
 
 Tools that Nodestro's AI writes, and their tests, run only in separate, locked-down containers: no network, read-only,
@@ -113,7 +122,8 @@ cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
 ## Data, backups and updates
 
 - All data (workflows, runs, knowledge, settings, encrypted provider keys, the access key) lives in the volume
-  `nodestro-local_data`. `stop`, `restart`, `update` and `uninstall` keep it.
+  `nodestro-local_data`, the local models in `nodestro-local_models`. `stop`, `restart`, `update` and `uninstall`
+  keep both. Backups contain the data, not the models.
 - `./nodestro backup` writes the studio's own complete backup. `restore` reads it back, also on another computer.
 - `./nodestro update` backs up to `backups/`, snapshots the volume, starts the new version and returns to the old
   one by itself if it does not start. `./nodestro rollback` returns later. Updates are reproducible: the version is
@@ -127,12 +137,14 @@ cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
   itself, and loopback MCP connections are allowed only in the desktop app. Remote MCP servers over HTTPS work.
 - The desktop app's built-in Linux sandbox is not used. AI-generated tools need the sandbox containers, so Docker
   must be able to start them.
+- Local models run on the CPU; GPU use in the container is not tested, and Docker Desktop on macOS has none.
 - One person only. For several people, use [nodestro-server](https://github.com/peterkarlhuber/nodestro-server).
 
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the decision (variants compared), components, what is reused
 - [docs/SESSIONS.md](docs/SESSIONS.md): how browser sessions work (host name, lifetime, logout, browsers)
+- [docs/LOCAL-MODELS.md](docs/LOCAL-MODELS.md): the local model server (Ollama), offline imports, settings
 - [docs/SECURITY.md](docs/SECURITY.md): the security model, container and sandbox configuration, residual risks
 - [docs/PLATFORMS.md](docs/PLATFORMS.md): what was tested where, and what was not
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): building, testing, pins, CI

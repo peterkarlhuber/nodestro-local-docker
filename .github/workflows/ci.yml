@@ -36,6 +36,8 @@ jobs:
           docker compose -f compose.yaml config -q
           NODESTRO_EXTRA_CA_FILE=/etc/ssl/certs/ca-certificates.crt docker compose -f compose.yaml -f compose.extra-ca.yaml config -q
           docker compose -f compose.yaml -f tests/compose.test.yaml config -q
+          docker compose -f compose.yaml -f compose.local-models-off.yaml config -q
+          docker compose -f compose.yaml -f compose.local-models-offline.yaml config -q
       - name: Test code
         run: pipx run ruff==0.14.0 check tests
       - name: Pins (full SHAs on master, studio pins agree)

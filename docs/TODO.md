@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 6 |
+| P3 Low | 9 |
 | P4 Optional | 3 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned. Before any release,
@@ -79,8 +79,9 @@ None known.
 ### LD-007 · Proxy settings for the studio container
 
 - **Priority:** P3 Low · **Status:** Open · **Refs:** `compose.yaml`, `compose.extra-ca.yaml`, Bedrock deployment analysis section 3
-- **What:** `HTTPS_PROXY`/`NO_PROXY` are not passed to the `nodestro` service, so model providers behind a
-  mandatory proxy work only with a hand-written `compose.override.yaml`. The CA overlay exists already.
+- **What:** `HTTPS_PROXY`/`NO_PROXY` are not passed to the `nodestro` and `ollama` services, so model providers and
+  Ollama model downloads behind a mandatory proxy work only with a hand-written `compose.override.yaml` (`NO_PROXY`
+  must then contain `ollama`). The CA overlay exists already and covers `ollama` too.
 - **Next step:** Pass the proxy variables through when they are set (or document the override), and cover it in the docs.
 
 ### LD-011 · MCP servers on the host's localhost
@@ -90,7 +91,32 @@ None known.
   and loopback MCP connections are allowed only in the desktop app.
 - **Next step:** Decide whether a host-gateway allowlist is worth its risk.
 
+### LD-016 · GPU for the local model server
+
+- **Priority:** P3 Low · **Status:** Open · **Refs:** `docs/LOCAL-MODELS.md`
+- **What:** The `ollama` container uses the CPU only: the compose file passes no GPU, although the image contains the
+  NVIDIA CUDA libraries. NVIDIA on Linux and on Windows (WSL 2) could work with a GPU overlay
+  (`deploy.resources.reservations.devices`); untested, so not offered. Docker Desktop on macOS cannot pass a GPU.
+- **Next step:** Add `compose.local-models-gpu.yaml` and a launcher setting, and test it on a real NVIDIA machine.
+
+### LD-017 · Smaller image for the local model server
+
+- **Priority:** P3 Low · **Status:** Open · **Refs:** `compose.yaml` (`x-ollama-image`)
+- **What:** The official Ollama image is about 3.4 GB to download on amd64 (2.8 GB on arm64) and 8.5 GB unpacked,
+  mostly CUDA libraries that a CPU-only installation never uses.
+- **Next step:** Evaluate a CPU-only image built from the SHA-256-verified release archive (the same pin as the
+  desktop app), with its own digest pin and scan; weigh it against following the upstream image.
+
 ## Tests and quality assurance
+
+### LD-018 · Local model inference in the end-to-end tests
+
+- **Priority:** P3 Low · **Status:** Open · **Refs:** `tests/e2e/test_local_docker.py`
+- **What:** The end-to-end tests check the model server's lockdown, network and shared volume, but load no model: no
+  test runs an agent or a semantic knowledge search through the container, or an offline package import from
+  `/import`, because the studio pin does not contain the local model features yet and a real model is gigabytes.
+- **Next step:** After the studio pin includes them, import a tiny GGUF from `/import` and run a chat and an
+  embedding through the studio's API.
 
 None known beyond the platform items below.
 
@@ -172,6 +198,7 @@ None known beyond the platform items below.
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
 | – | nodestro-server | SRV-003 image vulnerability scan (same image definition, target `local`) | Covers this image |
 | – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
+| LD-018 | nodestro-runtime, nodestro-studio | Local models (`docs/local-models.md`), studio pin | Needs the pin |
 | LD-009 | nodestro-server, nodestro-desktop | SRV-016, DSK-013 (pin distance warning) | Same check in all three |
 
 ## CI access to private repositories

@@ -10,3 +10,9 @@ services:
       NODESTRO_BUILD_CA_FILE: /run/nodestro-ca/ca.pem
     volumes:
       - ${NODESTRO_EXTRA_CA_FILE:?NODESTRO_EXTRA_CA_FILE names the certificate bundle}:/run/nodestro-ca/ca.pem:ro
+  # Model downloads from the Ollama registry (Go reads SSL_CERT_FILE).
+  ollama:
+    environment:
+      SSL_CERT_FILE: /run/nodestro-ca/ca.pem
+    volumes:
+      - ${NODESTRO_EXTRA_CA_FILE:?NODESTRO_EXTRA_CA_FILE names the certificate bundle}:/run/nodestro-ca/ca.pem:ro

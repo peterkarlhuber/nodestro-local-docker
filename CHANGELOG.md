@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Local model server (2026-11-03)
+
+- New container `ollama`: Ollama 0.40.14, the official `ollama/ollama` image pinned by the digest of its
+  multi-platform index. User 10001, read-only, no capabilities, `no-new-privileges`, `OLLAMA_NO_CLOUD=1`, no published
+  port. Only the studio reaches it, on the new internal network `models`; its own network `models-egress` is for model
+  downloads. New volume `models` (Ollama's model store), shared with the studio for offline imports; the one-shot
+  `models-init` hands it to user 10001.
+- The studio container gets `NODESTRO_OLLAMA_URL=http://ollama:11434` and
+  `NODESTRO_OLLAMA_MODELS_DIR=/var/lib/nodestro-models` (nodestro-runtime `docs/local-models.md`, profile
+  `local-container`; used once the studio pin contains the local model features), and the host folder
+  `NODESTRO_IMPORT_DIR` (default `import/`) read-only as `/import`.
+- Launchers (`nodestro`, `nodestro.ps1`): `NODESTRO_LOCAL_MODELS=on|offline|off` (remembered in the state file;
+  `compose.local-models-offline.yaml` removes the download network, `compose.local-models-off.yaml` leaves the model
+  server out), the `import` folder, a note before the first download of the Ollama image.
+- `compose.extra-ca.yaml` gives Ollama the proxy's certificate authority too. The test of other containers reaching the
+  studio's address picks the project's default network explicitly (the studio now has two networks).
+- New end-to-end tests: the model server is pinned and locked down; only the studio reaches it, on an internal
+  network; the studio shares the model folder and reads the import folder read-only. New docs/LOCAL-MODELS.md; README,
+  ARCHITECTURE, SECURITY, PLATFORMS and TODO (LD-016 GPU, LD-017 smaller image, LD-018 inference in e2e) updated.
+
 ### Backend audit round 2 pins (2026-11-03)
 
 - `components.json` pins studio `6e94ae4` (merge commit of studio #112: nodestro-api `7c195ed`, exporting a project
