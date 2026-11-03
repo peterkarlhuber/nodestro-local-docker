@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-03 against `master` at `4b7efb5` (backend audit round 2).
+> **Last full review:** 2026-11-03 against `master` at `b6408a5` (close-out of the backend audit round 2).
 
 ## Summary
 
@@ -173,6 +173,13 @@ None known beyond the platform items below.
 | – | nodestro-server | SRV-003 image vulnerability scan (same image definition, target `local`) | Covers this image |
 | – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
 | LD-009 | nodestro-server, nodestro-desktop | SRV-016, DSK-013 (pin distance warning) | Same check in all three |
+
+## CI access to private repositories
+
+Keep the repository secret `NODESTRO_READ`; do not delete it. CI currently installs the sibling repositories anonymously
+because they are public, and does not need the secret. When the repositories become private, CI authenticates again
+with this read-only secret, passed only in the environment of the install steps (never in a global Git configuration,
+a log or an image layer).
 
 ## Maintaining this file
 
