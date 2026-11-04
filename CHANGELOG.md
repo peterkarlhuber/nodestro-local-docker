@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 2c072d7 (studio #123, #124: backend audit and UX round 3; api 5ee13f7, runtime 40c8c06,
+  orkexa e9c2147 with the reclaim of a stale managed Ollama, axentra 0a1d1cc) and nodestro-server a567530 (server #51
+  restore and upgrade fixes, #53).
+
 - The Ollama image is named by tag and digest (`ollama/ollama:0.40.14@sha256:…`; Docker still uses the digest).
   `scripts/check-pins.sh` (CI) checks that both services use the same image and that its version is the
   `OLLAMA_VERSION` Orkexa installs at the studio's pinned Orkexa commit; the end-to-end test takes the version from
