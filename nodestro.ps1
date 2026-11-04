@@ -232,7 +232,8 @@ function Undo-Update {
 switch ($Command) {
     "start" { Start-Nodestro }
     "stop" { Require-Docker; Load-State; Invoke-Compose stop; Write-Host "Nodestro stopped. Your data is kept." }
-    "restart" { Require-Docker; Load-State; Invoke-Compose restart; Invoke-Compose up -d --wait --wait-timeout 300; Open-Browser }
+    # stop + up, not `compose restart` (parallel; a container cannot join the namespace of `network` while it restarts)
+    "restart" { Require-Docker; Load-State; Invoke-Compose stop; Invoke-Compose up -d --wait --wait-timeout 300; Open-Browser }
     "status" {
         Require-Docker; Load-State; Invoke-Compose ps
         try { Invoke-Compose exec -T nodestro nodestro-local status } catch { Write-Host "Nodestro is not running." }

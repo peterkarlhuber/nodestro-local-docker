@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- The Ollama image is named by tag and digest (`ollama/ollama:0.40.14@sha256:…`; Docker still uses the digest).
+  `scripts/check-pins.sh` (CI) checks that both services use the same image and that its version is the
+  `OLLAMA_VERSION` Orkexa installs at the studio's pinned Orkexa commit; the end-to-end test takes the version from
+  the tag. Dependabot now also proposes updates of the images in `compose.yaml`.
+
+- Resource limits for the studio and the model server (#11). `nodestro`: 4 GB memory, 512 processes
+  (`NODESTRO_MEMORY`, `NODESTRO_PIDS`; `NODESTRO_CPUS`, default `0`: all CPUs). `ollama`: 16 GB memory, 2048 processes
+  (`NODESTRO_OLLAMA_MEMORY`, `NODESTRO_OLLAMA_PIDS`, `NODESTRO_OLLAMA_CPUS`), enough for the suggested 4B and 9B models
+  with the 32768-token context window, and `oom_score_adj` 500, so that out of memory the kernel ends Ollama's model
+  runner before the studio. The end-to-end test checks the defaults.
+
+- Ollama no longer has a container address: it runs in the network namespace of the studio and listens on
+  127.0.0.1:11434 only, so the studio reaches it on the shared loopback (`NODESTRO_OLLAMA_URL=http://127.0.0.1:11434`).
+  Before, any process on a Linux host with Docker Engine could reach Ollama's unauthenticated API at its container
+  addresses. The namespace belongs to the new small container `network` (`sleep` as user nobody, read-only, no
+  capabilities, no volume, 32 MB), which also publishes the studio's port, so it outlives restarts of `nodestro` and
+  `ollama`. The networks `models` and `models-egress` are gone; Ollama downloads over the studio's internet access.
+  `NODESTRO_LOCAL_MODELS=offline` now sets a closed local proxy port for Ollama's outgoing requests (an Ollama setting,
+  no longer a separate network). `restart` in both launchers stops and starts the containers (`docker compose restart`
+  cannot restart containers that share a namespace in one call). An existing installation switches on its next
+  `start` or `update`; the unused networks stay (`docker network rm nodestro-local_models nodestro-local_models-egress`
+  removes them).
+
 - `components.json` pins studio `0a6a320` (studio #120: nodestro-runtime `2f1de71`, orkexa `6e61862`: key figures that
   a condition decides on, or that report money or days, must come from a tool, and the runtime checks them; the new
   built-in `table_totals` tool; local Ollama agents with a structured result call their tools; production-downtime

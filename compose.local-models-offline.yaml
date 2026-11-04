@@ -1,6 +1,17 @@
-# NODESTRO_LOCAL_MODELS=offline: the local model server without internet access (the launcher adds this file). Models
-# come only from offline imports (docs/LOCAL-MODELS.md); downloads in the studio fail. Combine with the studio's
-# strict offline mode for an installation that uses no external model service at all.
+# NODESTRO_LOCAL_MODELS=offline: the local model server without downloads (the launcher adds this file). Models come
+# only from offline imports (docs/LOCAL-MODELS.md); downloads in the studio fail. Combine with the studio's strict
+# offline mode for an installation that uses no external model service at all.
+#
+# Ollama shares the studio's network namespace (compose.yaml, service `network`), so it cannot lose the internet
+# without the studio. Its outgoing HTTP(S) requests go to a proxy address on which nothing listens, so its registry
+# downloads and update checks fail; requests to 127.0.0.1 (the studio's own calls to Ollama) never use a proxy. This
+# is a setting of Ollama, not a network boundary (docs/SECURITY.md).
 services:
   ollama:
-    networks: !override [models]
+    environment:
+      HTTPS_PROXY: http://127.0.0.1:9
+      HTTP_PROXY: http://127.0.0.1:9
+      https_proxy: http://127.0.0.1:9
+      http_proxy: http://127.0.0.1:9
+      NO_PROXY: ""
+      no_proxy: ""

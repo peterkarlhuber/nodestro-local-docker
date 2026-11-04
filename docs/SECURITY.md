@@ -127,16 +127,23 @@ socket, which root owns.
 
 `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`, user 10001, tmpfs `/tmp` (1 GB), no host paths except
 the named volumes `data` and `sandbox-socket`, and a health check. It has network access, because model providers
-and the tool environment builds need it.
+and the tool environment builds need it. Limits: 4 GB memory (`NODESTRO_MEMORY`), 512 processes (`NODESTRO_PIDS`),
+all CPUs unless `NODESTRO_CPUS` sets a number.
 
 ### Local model server configuration
 
 `ollama` (Ollama 0.40.14, the official image pinned by digest): user 10001, `read_only: true`, `cap_drop: [ALL]`,
 `no-new-privileges`, tmpfs `/tmp` as its home (its key pair is not kept), `OLLAMA_NO_CLOUD=1`, no published port, no
-Docker socket, no host path. Only `nodestro` shares its internal network `models` (`internal: true`: no route to the
-host or the internet); tool containers have no network at all. Ollama's API has no authentication, so this network
-is its boundary. Its second network `models-egress` is for model downloads; `NODESTRO_LOCAL_MODELS=offline` removes
-it. The one-shot `models-init` runs as root with only `CAP_CHOWN` and no network, to hand the new volume to user
+Docker socket, no host path. Ollama's API has no authentication, so it listens on 127.0.0.1:11434 only, in the network
+namespace it shares with `nodestro` (held by the `network` container: `sleep` as user nobody, read-only, no
+capabilities, no volume, 32 MB). Only processes in that namespace reach it: the studio, Ollama itself and the
+`network` container's `sleep`. Other containers and tool containers (no network at all) cannot, and neither can the
+host or its users: Docker Engine on Linux routes the host to container addresses, but nothing listens on them for
+Ollama. In that namespace Ollama has the studio's internet access, for model downloads; `NODESTRO_LOCAL_MODELS=offline`
+sets a closed local proxy port for Ollama's outgoing HTTP(S) requests, which stops its downloads and update checks but
+is a setting of Ollama, not a network boundary. Limits: 16 GB memory (`NODESTRO_OLLAMA_MEMORY`), 2048 processes
+(`NODESTRO_OLLAMA_PIDS`), all CPUs unless `NODESTRO_OLLAMA_CPUS` sets a number; out of memory, the kernel ends
+Ollama's model runner before the studio (`oom_score_adj` 500). The one-shot `models-init` runs as root with only `CAP_CHOWN` and no network, to hand the new volume to user
 10001. Models a person downloads or imports are data files run by Ollama's inference engine; a malicious model file
 could exploit a parser flaw in it, which would reach the `ollama` container with the restrictions above (and the
 model volume), not the studio's data. See [LOCAL-MODELS.md](LOCAL-MODELS.md).

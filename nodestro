@@ -158,7 +158,7 @@ start() {
   require_image
   local models_image
   if [ "$NODESTRO_LOCAL_MODELS" != off ]; then
-    models_image="$(compose config --images 2>/dev/null | grep -m 1 '/ollama@' || true)"
+    models_image="$(compose config --images 2>/dev/null | grep -m 1 '/ollama[:@]' || true)"
     if [ -n "$models_image" ] && ! docker image inspect "$models_image" >/dev/null 2>&1; then
       say "Downloading the local model server (Ollama, about 3.4 GB on amd64, once; NODESTRO_LOCAL_MODELS=off skips it)..."
     fi
@@ -234,7 +234,9 @@ shift || true
 case "$command" in
   start) start ;;
   stop) require_docker; load_state; compose stop; say "Nodestro stopped. Your data is kept (start again: ./nodestro start)." ;;
-  restart) require_docker; load_state; compose restart; compose up -d --wait --wait-timeout 300; open_browser ;;
+  # stop + up, not `compose restart`: it restarts the services in parallel, and a container cannot join the namespace
+  # of `network` while that one restarts.
+  restart) require_docker; load_state; compose stop; compose up -d --wait --wait-timeout 300; open_browser ;;
   status)
     require_docker; load_state
     compose ps

@@ -81,7 +81,7 @@ What the tests show on rootless Docker:
   The launcher does not take Docker Desktop's context socket (`~/.docker/run/docker.sock`): that path exists on the
   host, not in the VM.
 - **Local models** (the `ollama` container): tested on Linux amd64 and arm64 and rootless Docker in CI (start,
-  lockdown, internal network, shared volume; no model inference in CI). On Docker Desktop the model server runs on the
+  lockdown, shared loopback closed to the host, shared volume; no model inference in CI). On Docker Desktop the model server runs on the
   VM's CPUs and memory: give Docker Desktop enough memory for the model (Settings, Resources; at least 8 GB for the
   smallest suggested model). Not tested: Docker Desktop, GPUs.
 - **Apple Silicon**: use the arm64 image (the default when building on the Mac). An amd64 image under Rosetta is not

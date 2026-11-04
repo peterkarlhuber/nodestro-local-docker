@@ -10,3 +10,12 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+  # The Ollama image in compose.yaml (tag and digest, in two services). scripts/check-pins.sh fails such a pull request
+  # until orkexa's OLLAMA_VERSION (through a new studio pin) names the same release.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: nodestro-local # built from components.json, not pulled

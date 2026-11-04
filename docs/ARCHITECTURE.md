@@ -75,7 +75,8 @@ host browser ──http://nodestro-<random>.localhost:8765──▶ [ nodestro ]
                                             ▼
                                      host Docker daemon ──▶ tool containers (no network, read-only, nobody, limits)
 
-[ nodestro ] ──network `models` (internal, http://ollama:11434)──▶ [ ollama ]  local models, volume `models` (shared)
+[ network ] holds the network namespace, publishes 127.0.0.1:NODESTRO_PORT ──▶ studio port 8080
+   └─ shared by [ nodestro ] ──http://127.0.0.1:11434 (loopback)──▶ [ ollama ]  local models, volume `models` (shared)
 ```
 
 - **`nodestro`** container: the image's `nodestro-local serve`. It is the studio, API and runtime of the pinned
@@ -87,9 +88,12 @@ host browser ──http://nodestro-<random>.localhost:8765──▶ [ nodestro ]
   locked-down tool containers and builds tool environments from Nodestro's own Dockerfile. See
   [SECURITY.md](SECURITY.md).
 - **`ollama`** container: the local model server, the official Ollama 0.40.14 image pinned by digest, user 10001,
-  read-only, no capabilities, no published port, on the internal network `models` with the studio (and its own
-  network for model downloads). `models-init` hands it the model volume once per start. See
+  read-only, no capabilities, no published port, listening on 127.0.0.1:11434 in the network namespace it shares with
+  the studio, so only the studio reaches it. `models-init` hands it the model volume once per start. See
   [LOCAL-MODELS.md](LOCAL-MODELS.md).
+- **`network`** container: holds that shared namespace and publishes the studio's port on the host's loopback
+  (`sleep` as user nobody, read-only, no capabilities, no volume), so the namespace outlives restarts of `nodestro`
+  and `ollama`.
 - **Volumes**: `data` (everything persistent), `sandbox-socket` (the gateway's socket, shared with `nodestro`) and
   `models` (Ollama's model store, shared with `nodestro` for offline imports).
 - **Launcher**: `nodestro` (bash, Linux and macOS) and `nodestro.ps1` (Windows). They wrap `docker compose` for

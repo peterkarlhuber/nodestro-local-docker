@@ -2,22 +2,28 @@
 #
 #   ./nodestro start          (Windows: .\nodestro.ps1 start)
 #
-# Two containers from the same image, and the local model server:
+# Containers from the same image, and the local model server:
 #
-# - `nodestro`: the studio (web interface and API) on SQLite in the volume `data`. Its port is published on the host's
-#   loopback only (127.0.0.1); every request needs the access key (the launcher opens the browser with it).
+# - `network`: holds the network namespace that `nodestro` and `ollama` share (a `sleep`, nothing else). Its port
+#   8080 (the studio's) is published on the host's loopback only (127.0.0.1).
+# - `nodestro`: the studio (web interface and API) on SQLite in the volume `data`, in the namespace of `network`; every
+#   request needs the access key (the launcher opens the browser with it).
 # - `gateway`: the only container with the host's Docker socket. It has no network, no capabilities and a read-only
 #   file system, and offers `nodestro` a socket of its own on which only locked-down tool containers can be started
 #   (no network, read-only, no capabilities, user nobody, limits). See docs/SECURITY.md.
 # - `ollama`: the local model server (Ollama 0.40.14, the official image pinned by digest) for local models and the
-#   embeddings of semantic knowledge search. No published port: only `nodestro` reaches it, on the internal network
-#   `models`. Its models live in the volume `models`, which `nodestro` shares for offline imports (docs/LOCAL-MODELS.md).
-#   `models-init` only hands that volume to the unprivileged user both containers run as, then exits.
+#   embeddings of semantic knowledge search. In the namespace of `network` too, listening on 127.0.0.1:11434 only:
+#   `nodestro` reaches it on the shared loopback; the host, other users and other containers cannot (its API has no
+#   authentication). No published port. Its models live in the volume `models`, which `nodestro` shares for offline
+#   imports (docs/LOCAL-MODELS.md). `models-init` only hands that volume to the unprivileged user both containers run
+#   as, then exits.
 #
 # Settings (environment or .env next to this file): NODESTRO_PORT (8765), NODESTRO_IMAGE, NODESTRO_DOCKER_SOCKET
 # (/var/run/docker.sock; rootless Docker: $XDG_RUNTIME_DIR/docker.sock), NODESTRO_SANDBOX_MAX_CONTAINERS (4),
 # NODESTRO_BROWSER_HOST (empty: the installation's random *.localhost name; another name weakens docs/SESSIONS.md),
 # NODESTRO_IMPORT_DIR (./import: the folder for offline model imports, read-only in the studio as /import).
+# Limits: NODESTRO_MEMORY (4g), NODESTRO_PIDS (512), NODESTRO_CPUS (0: no limit) for the studio, and
+# NODESTRO_OLLAMA_MEMORY (16g), NODESTRO_OLLAMA_PIDS (2048), NODESTRO_OLLAMA_CPUS (0) for the model server.
 # The launcher's NODESTRO_LOCAL_MODELS=off leaves the model server out (compose.local-models-off.yaml), =offline keeps
 # it without internet access (compose.local-models-offline.yaml).
 name: ${NODESTRO_PROJECT:-nodestro-local}
@@ -29,11 +35,32 @@ x-hardening: &hardening
   restart: unless-stopped
   init: false # the image starts tini itself
 
-# Ollama 0.40.14, the digest of its multi-platform index (linux/amd64, linux/arm64). Docker Hub lists it as
-# ollama/ollama:0.40.14; the tag is not used, so a moved tag changes nothing.
-x-ollama-image: &ollama-image docker.io/ollama/ollama@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
-
 services:
+  # The network namespace of `nodestro` and `ollama`: if either restarts or crashes, it joins this namespace again,
+  # and the other one keeps working (a container that joins the namespace of another one loses it when that one
+  # restarts). Recreated (and with it both) only when the image changes.
+  network:
+    <<: *hardening
+    image: ${NODESTRO_IMAGE:-nodestro-local:dev}
+    entrypoint: ["sleep", "infinity"]
+    user: "65534:65534"
+    init: true
+    tmpfs:
+      - /var/lib/nodestro:size=4k,mode=0500 # instead of an anonymous volume for the image's VOLUME
+    ports:
+      - "127.0.0.1:${NODESTRO_PORT:-8765}:8080"
+    mem_limit: 32m
+    pids_limit: 8
+    stop_grace_period: 2s
+    # A trivial check of its own: the image's check would ask the studio, which only shares this namespace, and
+    # `up --wait` refuses services without a health check on some Compose versions.
+    healthcheck:
+      test: ["CMD", "sleep", "0"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      start_interval: 1s
+
   gateway:
     <<: *hardening
     image: ${NODESTRO_IMAGE:-nodestro-local:dev}
@@ -68,13 +95,12 @@ services:
       # Empty: the random nodestro-<random>.localhost name of this installation (docs/SESSIONS.md).
       NODESTRO_BROWSER_HOST: ${NODESTRO_BROWSER_HOST:-}
       # The local model server and its model folder (nodestro-runtime docs/local-models.md, profile local-container).
-      NODESTRO_OLLAMA_URL: http://ollama:11434
+      # Ollama listens on the loopback of the shared namespace (service `network`).
+      NODESTRO_OLLAMA_URL: http://127.0.0.1:11434
       NODESTRO_OLLAMA_MODELS_DIR: /var/lib/nodestro-models
       # The context window the ollama service starts with (below), so Studio shows and checks the same value.
       NODESTRO_OLLAMA_CONTEXT_LENGTH: ${NODESTRO_OLLAMA_CONTEXT_LENGTH:-32768}
-    networks: [default, models]
-    ports:
-      - "127.0.0.1:${NODESTRO_PORT:-8765}:8080"
+    network_mode: "service:network"
     volumes:
       - data:/var/lib/nodestro
       - sandbox-socket:/run/nodestro-sandbox
@@ -83,9 +109,12 @@ services:
     tmpfs:
       - /tmp:size=1g,mode=1777
     depends_on:
+      network: {condition: service_started}
       gateway: {condition: service_healthy}
-      # Started first, but the studio does not wait for it: without the model server it starts and says so.
-      ollama: {condition: service_started, required: false}
+    # Limits, so that a runaway run or a large upload cannot take the whole computer (NODESTRO_CPUS=0: no limit).
+    mem_limit: ${NODESTRO_MEMORY:-4g}
+    pids_limit: ${NODESTRO_PIDS:-512}
+    cpus: ${NODESTRO_CPUS:-0}
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "-I", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4)"]
@@ -97,7 +126,7 @@ services:
   # Hands the model volume to the user 10001 (the studio's and Ollama's), then exits. Root only with CAP_CHOWN, no
   # network, no other capability.
   models-init:
-    image: *ollama-image
+    image: docker.io/ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
     entrypoint: ["/bin/chown", "10001:10001", "/models"]
     user: "0:0"
     read_only: true
@@ -111,10 +140,14 @@ services:
 
   ollama:
     <<: *hardening
-    image: *ollama-image
+    # Ollama 0.40.14 and the digest of its multi-platform index (linux/amd64, linux/arm64), the same as models-init's.
+    # Docker uses the digest, so a moved tag changes nothing; the tag names the version for people, Dependabot and
+    # scripts/check-pins.sh, which checks that it is the release Orkexa installs.
+    image: docker.io/ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
     user: "10001:10001"
     environment:
-      OLLAMA_HOST: 0.0.0.0:11434
+      # The loopback of the namespace it shares with `nodestro` (service `network`): no other address listens.
+      OLLAMA_HOST: 127.0.0.1:11434
       OLLAMA_MODELS: /models
       # No ollama.com cloud models or account features; the studio only ever uses local models here.
       OLLAMA_NO_CLOUD: "1"
@@ -123,29 +156,33 @@ services:
       OLLAMA_CONTEXT_LENGTH: ${NODESTRO_OLLAMA_CONTEXT_LENGTH:-32768}
       # Ollama keeps a key pair in $HOME/.ollama; it is used for nothing here, so it lives in memory only.
       HOME: /tmp
-    # `models`: the studio's internal network (no internet). `models-egress`: Ollama's own way out, for model
-    # downloads from the Ollama registry that a person starts in the studio.
-    networks: [models, models-egress]
+    # The studio's namespace: Ollama reaches the internet like the studio (model downloads a person starts in the
+    # studio) and is reachable only on its loopback. No network of its own.
+    network_mode: "service:network"
     volumes:
       - models:/models
     tmpfs:
       - /tmp:size=256m,mode=1777
     depends_on:
+      network: {condition: service_started}
       models-init: {condition: service_completed_successfully}
+    # A model needs its weights plus its context window in memory: nodestro-runtime's catalog estimates 6 GB for
+    # qwen3.5:4b and 10 GB for qwen3.5:9b (the default agent and assistant models). 16g leaves room for both and keeps
+    # a larger model from taking all of the computer's memory; Docker Desktop's VM memory is a limit too. If memory
+    # runs out anyway, the kernel ends Ollama's model runner before the studio (oom_score_adj). Runners start many
+    # threads, hence the high pids_limit. NODESTRO_OLLAMA_CPUS=0: all cores.
+    mem_limit: ${NODESTRO_OLLAMA_MEMORY:-16g}
+    pids_limit: ${NODESTRO_OLLAMA_PIDS:-2048}
+    cpus: ${NODESTRO_OLLAMA_CPUS:-0}
+    oom_score_adj: 500
     stop_grace_period: 20s
+    # `ollama list` asks the server and fails while it does not answer (`ollama --version` exits 0 without a server).
     healthcheck:
-      test: ["CMD", "ollama", "--version"]
+      test: ["CMD", "ollama", "list"]
       interval: 3s
       timeout: 5s
       start_period: 60s
       retries: 40
-
-networks:
-  default:
-  # Internal: no route to the host or the internet. The studio talks to Ollama here.
-  models:
-    internal: true
-  models-egress:
 
 volumes:
   # Workflows, runs, knowledge, settings and the access key. Kept by stop, restart and update; removed only by

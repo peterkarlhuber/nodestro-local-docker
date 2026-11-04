@@ -3,7 +3,8 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-03 against `master` at `b6408a5` (close-out of the backend audit round 2).
+> **Last full review:** 2026-11-04 against `master` at `69c4a91` (internal backend audit round 3; Ollama loopback,
+> limits and pin check in the PR that updates this line).
 
 ## Summary
 
@@ -48,11 +49,15 @@ None known for a planned release (see the summary).
   findings privately. The gateway code lives in nodestro-runtime.
 - **Depends on:** nodestro-runtime (`sandbox_gateway.py`)
 
-### LD-004 · Resource limits for the studio container
+### LD-019 · Offline mode is an Ollama setting, not a network boundary
 
-- **Priority:** P3 Low · **Status:** Open · **Refs:** #11, backend audit D-16
-- **What:** Only the `gateway` service has memory and process limits; the `nodestro` service has none.
-- **Next step:** Add configurable limits and test them (see #11).
+- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** internal backend audit 2026-11-04 (OPS3-02),
+  docs/SECURITY.md
+- **What:** Since 2026-11-04 Ollama shares the studio's network namespace and listens on loopback only, so host
+  processes can no longer reach its unauthenticated API. In exchange, `NODESTRO_LOCAL_MODELS=offline` stops Ollama's
+  downloads with a closed proxy port instead of an internal-only network.
+- **Next step:** Decide whether air-gapped installs need a network boundary again (internal-only Ollama behind an
+  authenticating proxy).
 
 ## Bugs and reliability
 
@@ -114,8 +119,10 @@ None known.
 - **Priority:** P3 Low · **Status:** Open · **Refs:** `tests/e2e/test_local_docker.py`
 - **What:** The end-to-end tests check the model server's lockdown, network and shared volume, but load no model: no
   test runs an agent or a semantic knowledge search through the container, or an offline package import from
-  `/import`, because the studio pin does not contain the local model features yet and a real model is gigabytes.
-- **Next step:** After the studio pin includes them, import a tiny GGUF from `/import` and run a chat and an
+  `/import`, because a real model is gigabytes. The default limit `NODESTRO_OLLAMA_MEMORY=16g` was checked only with
+  `qwen3:0.6b` (4.4 GB at 32768 tokens); Ollama sizes models to host memory, not to the cgroup limit, so a too-small
+  limit ends in an OOM-killed model runner (HTTP 500, services stay healthy).
+- **Next step:** Import a tiny GGUF from `/import` and run a chat and an
   embedding through the studio's API.
 
 None known beyond the platform items below.

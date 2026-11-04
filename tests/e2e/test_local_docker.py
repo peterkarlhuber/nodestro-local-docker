@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from typing import Any
@@ -229,13 +230,18 @@ def installation() -> Iterator[None]:
 
 
 def test_the_port_is_published_on_the_host_loopback_only() -> None:
-    bindings = container("nodestro")["NetworkSettings"]["Ports"]["8080/tcp"]
+    # The namespace holder `network` publishes the studio's port; `nodestro` and `ollama` live in its namespace.
+    bindings = container("network")["NetworkSettings"]["Ports"]["8080/tcp"]
     assert bindings == [{"HostIp": "127.0.0.1", "HostPort": str(PORT)}]
+    holder = container("network")["Id"]
+    for service in ("nodestro", "ollama"):
+        assert container(service)["HostConfig"]["NetworkMode"] == f"container:{holder}", service
+        assert not container(service)["HostConfig"]["PortBindings"], service
     assert container("gateway")["NetworkSettings"]["Ports"] == {}
 
 
 def test_the_containers_are_locked_down() -> None:
-    for service in ("nodestro", "gateway"):
+    for service in ("network", "nodestro", "gateway"):
         host = container(service)["HostConfig"]
         assert host["ReadonlyRootfs"] is True, service
         assert host["CapDrop"] == ["ALL"] and not host["CapAdd"], service
@@ -248,6 +254,12 @@ def test_the_containers_are_locked_down() -> None:
     assert "/var/run/docker.sock" not in studio_mounts and "/run/nodestro-sandbox" in studio_mounts
     assert "/var/run/docker.sock" in {mount["Destination"] for mount in gateway["Mounts"]}
     assert container("nodestro")["Config"]["User"] == "10001:10001"
+    holder = container("network")
+    assert holder["Config"]["User"] == "65534:65534" and holder["Config"]["Entrypoint"] == ["sleep", "infinity"]
+    assert holder["Mounts"] == [] and holder["HostConfig"]["Memory"] > 0
+    # The default limits (NODESTRO_MEMORY, NODESTRO_PIDS, NODESTRO_CPUS): memory and processes, all CPUs.
+    studio = container("nodestro")["HostConfig"]
+    assert (studio["Memory"], studio["PidsLimit"], studio["NanoCpus"]) == (4 * 1024**3, 512, 0)
 
 
 def test_the_aws_sdk_is_in_the_image_but_no_aws_credentials_are() -> None:
@@ -348,7 +360,7 @@ def test_foreign_host_names_and_origins_are_refused() -> None:
 
 
 def test_other_containers_cannot_use_the_studio_through_its_address() -> None:
-    address = container("nodestro")["NetworkSettings"]["Networks"][f"{PROJECT}_default"]["IPAddress"]
+    address = container("network")["NetworkSettings"]["Networks"][f"{PROJECT}_default"]["IPAddress"]
     script = (
         "import urllib.request, urllib.error\n"
         f"r = urllib.request.Request('http://{address}:8080/api/workflows')\n"
@@ -364,39 +376,72 @@ def test_other_containers_cannot_use_the_studio_through_its_address() -> None:
 
 def test_the_local_model_server_is_pinned_and_locked_down() -> None:
     ollama = container("ollama")
-    assert re.fullmatch(r"docker\.io/ollama/ollama@sha256:[0-9a-f]{64}", ollama["Config"]["Image"])
+    image = re.fullmatch(r"docker\.io/ollama/ollama:([0-9.]+)@sha256:[0-9a-f]{64}", ollama["Config"]["Image"])
+    assert image, ollama["Config"]["Image"]
     assert ollama["Config"]["User"] == "10001:10001"
     host = ollama["HostConfig"]
     assert host["ReadonlyRootfs"] is True and host["Privileged"] is False
     assert host["CapDrop"] == ["ALL"] and not host["CapAdd"]
     assert "no-new-privileges:true" in host["SecurityOpt"]
+    # Default limits (NODESTRO_OLLAMA_MEMORY, _PIDS, _CPUS); out of memory, the kernel ends Ollama before the studio.
+    assert (host["Memory"], host["PidsLimit"], host["NanoCpus"]) == (16 * 1024**3, 2048, 0)
+    assert host["OomScoreAdj"] == 500
     # The image exposes 11434, but nothing is published on the host.
-    assert all(binding is None for binding in ollama["NetworkSettings"]["Ports"].values())
     assert not ollama["HostConfig"]["PortBindings"]
     env = dict(item.split("=", 1) for item in ollama["Config"]["Env"])
     assert env["OLLAMA_NO_CLOUD"] == "1" and env["OLLAMA_MODELS"] == "/models"
     assert env["OLLAMA_CONTEXT_LENGTH"] == "32768"
     assert "/var/run/docker.sock" not in {mount["Destination"] for mount in ollama["Mounts"]}
+    # The health check asks the server (`ollama --version` also exits 0 when no server answers).
+    assert ollama["Config"]["Healthcheck"]["Test"] == ["CMD", "ollama", "list"]
     version = compose("exec", "-T", "ollama", "ollama", "--version").stdout.decode()
-    assert "0.40.14" in version, version
+    assert image[1] in version, version
 
 
-def test_only_the_studio_reaches_the_model_server_on_an_internal_network() -> None:
-    networks = set(container("ollama")["NetworkSettings"]["Networks"])
-    assert networks == {f"{PROJECT}_models", f"{PROJECT}_models-egress"}
-    assert f"{PROJECT}_models" in container("nodestro")["NetworkSettings"]["Networks"]
-    assert json.loads(docker("network", "inspect", f"{PROJECT}_models").stdout)[0]["Internal"] is True
+def test_only_the_studio_reaches_the_model_server_on_the_shared_loopback() -> None:
+    # Ollama's API has no authentication: it listens on the loopback of the namespace it shares with the studio, so
+    # neither the host (every local user) nor another container reaches it (audit round 3 OPS3-02).
+    env = dict(item.split("=", 1) for item in container("ollama")["Config"]["Env"])
+    assert env["OLLAMA_HOST"] == "127.0.0.1:11434"
+    assert not container("ollama")["NetworkSettings"]["Networks"]
     env = dict(item.split("=", 1) for item in container("nodestro")["Config"]["Env"])
-    assert env["NODESTRO_OLLAMA_URL"] == "http://ollama:11434"
+    assert env["NODESTRO_OLLAMA_URL"] == "http://127.0.0.1:11434"
     assert env["NODESTRO_OLLAMA_MODELS_DIR"] == "/var/lib/nodestro-models"
+    pinned = container("ollama")["Config"]["Image"].split("@")[0].rsplit(":", 1)[1]  # compose.yaml's tag
     fetch = (
         "import json, urllib.request; "
-        "print(json.load(urllib.request.urlopen('http://ollama:11434/api/version', timeout=10))['version'])"
+        "print(json.load(urllib.request.urlopen('http://127.0.0.1:11434/api/version', timeout=10))['version'])"
     )
-    assert compose("exec", "-T", "nodestro", "python", "-I", "-c", fetch).stdout.decode().strip() == "0.40.14"
-    # Another container on the project's default network (the model stub) does not even find it.
-    found = compose("exec", "-T", "model-stub", "python", "-I", "-c", fetch, check=False)
-    assert found.returncode != 0
+    assert compose("exec", "-T", "nodestro", "python", "-I", "-c", fetch).stdout.decode().strip() == pinned
+    # The namespace's address on the project network: the studio's port answers there (with 403), Ollama's does not.
+    address = container("network")["NetworkSettings"]["Networks"][f"{PROJECT}_default"]["IPAddress"]
+    probe = (
+        "import socket, sys\n"
+        "for port in (8080, 11434):\n"
+        "    try:\n        socket.create_connection((sys.argv[1], port), timeout=5).close(); print(port, 'open')\n"
+        "    except OSError:\n        print(port, 'closed')\n"
+    )
+    seen = compose("exec", "-T", "model-stub", "python", "-I", "-c", probe, address).stdout.decode().split("\n")
+    assert "8080 open" in seen and "11434 closed" in seen, seen
+    if sys.platform.startswith("linux") and not _HOST.startswith("unix:///run/user/"):
+        # From the host itself (rootful Docker Engine routes the host to container addresses).
+        with pytest.raises(OSError):
+            socket.create_connection((address, 11434), timeout=5).close()
+
+
+def test_the_model_server_stays_reachable_when_the_studio_restarts() -> None:
+    # Both join the namespace of `network`; a restart of one (crash, OOM, `docker restart`) does not strand the other
+    # in a namespace that no longer has the studio (which a direct network_mode: service:nodestro would).
+    docker("restart", container("nodestro")["Id"])
+    wait_for(
+        lambda: container("nodestro")["State"].get("Health", {}).get("Status") == "healthy",
+        timeout=240,
+        what="the studio after docker restart",
+    )
+    fetch = (
+        "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:11434/api/version', timeout=10).status)"
+    )
+    assert compose("exec", "-T", "nodestro", "python", "-I", "-c", fetch).stdout.decode().strip() == "200"
 
 
 def test_the_studio_shares_the_model_folder_and_reads_the_import_folder() -> None:
