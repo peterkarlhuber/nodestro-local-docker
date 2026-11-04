@@ -234,7 +234,9 @@ shift || true
 case "$command" in
   start) start ;;
   stop) require_docker; load_state; compose stop; say "Nodestro stopped. Your data is kept (start again: ./nodestro start)." ;;
-  restart) require_docker; load_state; compose restart; compose up -d --wait --wait-timeout 300; open_browser ;;
+  # stop + up, not `compose restart`: it restarts the services in parallel, and a container cannot join the namespace
+  # of `network` while that one restarts.
+  restart) require_docker; load_state; compose stop; compose up -d --wait --wait-timeout 300; open_browser ;;
   status)
     require_docker; load_state
     compose ps

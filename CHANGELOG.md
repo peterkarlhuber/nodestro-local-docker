@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Ollama no longer has a container address: it runs in the network namespace of the studio and listens on
+  127.0.0.1:11434 only, so the studio reaches it on the shared loopback (`NODESTRO_OLLAMA_URL=http://127.0.0.1:11434`).
+  Before, any process on a Linux host with Docker Engine could reach Ollama's unauthenticated API at its container
+  addresses. The namespace belongs to the new small container `network` (`sleep` as user nobody, read-only, no
+  capabilities, no volume, 32 MB), which also publishes the studio's port, so it outlives restarts of `nodestro` and
+  `ollama`. The networks `models` and `models-egress` are gone; Ollama downloads over the studio's internet access.
+  `NODESTRO_LOCAL_MODELS=offline` now sets a closed local proxy port for Ollama's outgoing requests (an Ollama setting,
+  no longer a separate network). `restart` in both launchers stops and starts the containers (`docker compose restart`
+  cannot restart containers that share a namespace in one call). An existing installation switches on its next
+  `start` or `update`; the unused networks stay (`docker network rm nodestro-local_models nodestro-local_models-egress`
+  removes them).
+
 - `components.json` pins studio `0a6a320` (studio #120: nodestro-runtime `2f1de71`, orkexa `6e61862`: key figures that
   a condition decides on, or that report money or days, must come from a tool, and the runtime checks them; the new
   built-in `table_totals` tool; local Ollama agents with a structured result call their tools; production-downtime

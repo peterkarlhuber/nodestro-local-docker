@@ -106,7 +106,7 @@ access needed: `bedrock-runtime.<region>`, `bedrock.<region>` and `sts.<region>.
 ## Local models
 
 Nodestro runs models on your computer without an API key, through a separate Ollama container that only the studio
-can reach (no published port, an internal network). Download or import models in the studio (Settings, local
+can reach (no published port; it listens only on the loopback it shares with the studio). Download or import models in the studio (Settings, local
 models); for computers without internet, put offline packages or GGUF files into the `import` folder next to the
 launcher. `NODESTRO_LOCAL_MODELS=offline` keeps the model server off the internet, `=off` leaves it out. Details,
 hardware and the security setup: [docs/LOCAL-MODELS.md](docs/LOCAL-MODELS.md).
