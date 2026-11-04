@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `components.json` pins studio `f9e4a91` (studio #118, #119: nodestro-runtime `7cb9b4b`, in the CPU saving mode the
+  quality judge of a local thinking model also answers without the thinking phase, and the local Ollama gets 60 minutes
+  per request instead of the SDK's 10, so a long answer on CPU no longer fails with a provider timeout) and server
+  `81c1eb7` (server #49: the same studio pin).
+
 - `components.json` pins studio `74a9aa6` (studio #117: nodestro-runtime `3006ce0`, nodestro-api `c2a2ad3`, orkexa
   `4ec738c`: the CPU saving mode for thinking models, hardware and context window advice with a speed measurement,
   building mDenseOn from local files, per-agent local models when copying an example, robust hybrid knowledge search)
