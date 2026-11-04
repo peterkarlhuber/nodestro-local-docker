@@ -40,7 +40,7 @@ jobs:
           docker compose -f compose.yaml -f compose.local-models-offline.yaml config -q
       - name: Test code
         run: pipx run ruff==0.14.0 check tests
-      - name: Pins (full SHAs on master, studio pins agree)
+      - name: Pins (full SHAs on master, studio pins agree, Ollama image = Orkexa's Ollama)
         run: scripts/check-pins.sh
 
   windows-launcher:

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The Ollama image is named by tag and digest (`ollama/ollama:0.40.14@sha256:…`; Docker still uses the digest).
+  `scripts/check-pins.sh` (CI) checks that both services use the same image and that its version is the
+  `OLLAMA_VERSION` Orkexa installs at the studio's pinned Orkexa commit; the end-to-end test takes the version from
+  the tag. Dependabot now also proposes updates of the images in `compose.yaml`.
+
 - Resource limits for the studio and the model server (#11). `nodestro`: 4 GB memory, 512 processes
   (`NODESTRO_MEMORY`, `NODESTRO_PIDS`; `NODESTRO_CPUS`, default `0`: all CPUs). `ollama`: 16 GB memory, 2048 processes
   (`NODESTRO_OLLAMA_MEMORY`, `NODESTRO_OLLAMA_PIDS`, `NODESTRO_OLLAMA_CPUS`), enough for the suggested 4B and 9B models

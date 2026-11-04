@@ -35,10 +35,6 @@ x-hardening: &hardening
   restart: unless-stopped
   init: false # the image starts tini itself
 
-# Ollama 0.40.14, the digest of its multi-platform index (linux/amd64, linux/arm64). Docker Hub lists it as
-# ollama/ollama:0.40.14; the tag is not used, so a moved tag changes nothing.
-x-ollama-image: &ollama-image docker.io/ollama/ollama@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
-
 services:
   # The network namespace of `nodestro` and `ollama`: if either restarts or crashes, it joins this namespace again,
   # and the other one keeps working (a container that joins the namespace of another one loses it when that one
@@ -123,7 +119,7 @@ services:
   # Hands the model volume to the user 10001 (the studio's and Ollama's), then exits. Root only with CAP_CHOWN, no
   # network, no other capability.
   models-init:
-    image: *ollama-image
+    image: docker.io/ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
     entrypoint: ["/bin/chown", "10001:10001", "/models"]
     user: "0:0"
     read_only: true
@@ -137,7 +133,10 @@ services:
 
   ollama:
     <<: *hardening
-    image: *ollama-image
+    # Ollama 0.40.14 and the digest of its multi-platform index (linux/amd64, linux/arm64), the same as models-init's.
+    # Docker uses the digest, so a moved tag changes nothing; the tag names the version for people, Dependabot and
+    # scripts/check-pins.sh, which checks that it is the release Orkexa installs.
+    image: docker.io/ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
     user: "10001:10001"
     environment:
       # The loopback of the namespace it shares with `nodestro` (service `network`): no other address listens.

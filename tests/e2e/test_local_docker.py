@@ -376,7 +376,8 @@ def test_other_containers_cannot_use_the_studio_through_its_address() -> None:
 
 def test_the_local_model_server_is_pinned_and_locked_down() -> None:
     ollama = container("ollama")
-    assert re.fullmatch(r"docker\.io/ollama/ollama@sha256:[0-9a-f]{64}", ollama["Config"]["Image"])
+    image = re.fullmatch(r"docker\.io/ollama/ollama:([0-9.]+)@sha256:[0-9a-f]{64}", ollama["Config"]["Image"])
+    assert image, ollama["Config"]["Image"]
     assert ollama["Config"]["User"] == "10001:10001"
     host = ollama["HostConfig"]
     assert host["ReadonlyRootfs"] is True and host["Privileged"] is False
@@ -394,7 +395,7 @@ def test_the_local_model_server_is_pinned_and_locked_down() -> None:
     # The health check asks the server (`ollama --version` also exits 0 when no server answers).
     assert ollama["Config"]["Healthcheck"]["Test"] == ["CMD", "ollama", "list"]
     version = compose("exec", "-T", "ollama", "ollama", "--version").stdout.decode()
-    assert "0.40.14" in version, version
+    assert image[1] in version, version
 
 
 def test_only_the_studio_reaches_the_model_server_on_the_shared_loopback() -> None:
@@ -406,11 +407,12 @@ def test_only_the_studio_reaches_the_model_server_on_the_shared_loopback() -> No
     env = dict(item.split("=", 1) for item in container("nodestro")["Config"]["Env"])
     assert env["NODESTRO_OLLAMA_URL"] == "http://127.0.0.1:11434"
     assert env["NODESTRO_OLLAMA_MODELS_DIR"] == "/var/lib/nodestro-models"
+    pinned = container("ollama")["Config"]["Image"].split("@")[0].rsplit(":", 1)[1]  # compose.yaml's tag
     fetch = (
         "import json, urllib.request; "
         "print(json.load(urllib.request.urlopen('http://127.0.0.1:11434/api/version', timeout=10))['version'])"
     )
-    assert compose("exec", "-T", "nodestro", "python", "-I", "-c", fetch).stdout.decode().strip() == "0.40.14"
+    assert compose("exec", "-T", "nodestro", "python", "-I", "-c", fetch).stdout.decode().strip() == pinned
     # The namespace's address on the project network: the studio's port answers there (with 403), Ollama's does not.
     address = container("network")["NetworkSettings"]["Networks"][f"{PROJECT}_default"]["IPAddress"]
     probe = (

@@ -158,7 +158,7 @@ start() {
   require_image
   local models_image
   if [ "$NODESTRO_LOCAL_MODELS" != off ]; then
-    models_image="$(compose config --images 2>/dev/null | grep -m 1 '/ollama@' || true)"
+    models_image="$(compose config --images 2>/dev/null | grep -m 1 '/ollama[:@]' || true)"
     if [ -n "$models_image" ] && ! docker image inspect "$models_image" >/dev/null 2>&1; then
       say "Downloading the local model server (Ollama, about 3.4 GB on amd64, once; NODESTRO_LOCAL_MODELS=off skips it)..."
     fi
