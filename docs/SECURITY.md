@@ -134,8 +134,11 @@ and the tool environment builds need it.
 `ollama` (Ollama 0.40.14, the official image pinned by digest): user 10001, `read_only: true`, `cap_drop: [ALL]`,
 `no-new-privileges`, tmpfs `/tmp` as its home (its key pair is not kept), `OLLAMA_NO_CLOUD=1`, no published port, no
 Docker socket, no host path. Only `nodestro` shares its internal network `models` (`internal: true`: no route to the
-host or the internet); tool containers have no network at all. Ollama's API has no authentication, so this network
-is its boundary. Its second network `models-egress` is for model downloads; `NODESTRO_LOCAL_MODELS=offline` removes
+internet); tool containers have no network at all. Ollama's API has no authentication, so the networks are its
+boundary against containers. They are no boundary against the host: on Linux with Docker Engine, any process of any
+user on the host reaches Ollama at its container addresses (both networks) and can list, pull, delete or replace
+models and use the CPU; Docker Desktop does not route the host to container addresses. On a shared Linux host, use
+`NODESTRO_LOCAL_MODELS=off` or block the bridge addresses for other users. Its second network `models-egress` is for model downloads; `NODESTRO_LOCAL_MODELS=offline` removes
 it. The one-shot `models-init` runs as root with only `CAP_CHOWN` and no network, to hand the new volume to user
 10001. Models a person downloads or imports are data files run by Ollama's inference engine; a malicious model file
 could exploit a parser flaw in it, which would reach the `ollama` container with the restrictions above (and the

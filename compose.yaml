@@ -133,8 +133,9 @@ services:
     depends_on:
       models-init: {condition: service_completed_successfully}
     stop_grace_period: 20s
+    # `ollama list` asks the server and fails while it does not answer (`ollama --version` exits 0 without a server).
     healthcheck:
-      test: ["CMD", "ollama", "--version"]
+      test: ["CMD", "ollama", "list"]
       interval: 3s
       timeout: 5s
       start_period: 60s
@@ -142,7 +143,8 @@ services:
 
 networks:
   default:
-  # Internal: no route to the host or the internet. The studio talks to Ollama here.
+  # Internal: no route to the internet (processes on a Linux host still reach its addresses, docs/SECURITY.md). The
+  # studio talks to Ollama here.
   models:
     internal: true
   models-egress:

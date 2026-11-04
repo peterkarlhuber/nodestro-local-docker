@@ -377,6 +377,8 @@ def test_the_local_model_server_is_pinned_and_locked_down() -> None:
     assert env["OLLAMA_NO_CLOUD"] == "1" and env["OLLAMA_MODELS"] == "/models"
     assert env["OLLAMA_CONTEXT_LENGTH"] == "32768"
     assert "/var/run/docker.sock" not in {mount["Destination"] for mount in ollama["Mounts"]}
+    # The health check asks the server (`ollama --version` also exits 0 when no server answers).
+    assert ollama["Config"]["Healthcheck"]["Test"] == ["CMD", "ollama", "list"]
     version = compose("exec", "-T", "ollama", "ollama", "--version").stdout.decode()
     assert "0.40.14" in version, version
 

@@ -21,8 +21,11 @@ covers the container setup.
 ```
 
 - **No published port.** Ollama is reachable only on the internal network `models`, which only `nodestro` and
-  `ollama` join and which has no route to the host or the internet. Other containers, the host and the LAN cannot
-  reach it. AI-generated tools run in sandbox containers without any network and cannot reach it either.
+  `ollama` join and which has no route to the internet. Containers on other networks cannot reach it, and
+  AI-generated tools run in sandbox containers without any network. On a Linux host with Docker Engine, however,
+  processes on the host itself (every local user) can reach the container's addresses on both of its networks, and
+  Ollama's API has no authentication: on a computer that other people log in to, use `NODESTRO_LOCAL_MODELS=off` or
+  a firewall rule (docs/SECURITY.md). Docker Desktop (macOS, Windows) does not route the host to container addresses.
 - **Downloads.** A model a person downloads in the studio is fetched by Ollama itself, over its own network
   `models-egress`. Ollama also checks a model-recommendations cache at ollama.com every few hours while it has this
   network; it sends no prompts or data.
