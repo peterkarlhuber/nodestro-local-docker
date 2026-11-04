@@ -22,8 +22,10 @@ git -C "$work/nodestro-studio" checkout -q "$(pin nodestro-studio)"
 # release Orkexa installs, OLLAMA_VERSION in orkexa/local/install.py at the studio's pinned Orkexa commit (the desktop
 # app checks the same pin when it builds).
 image="$(sed -n 's|^ *image: \(docker\.io/ollama/.*\)$|\1|p' "$root/compose.yaml" | sort -u)"
-[ "$(grep -c 'image: docker\.io/ollama/' "$root/compose.yaml")" = 2 ] && [ "$(printf '%s\n' "$image" | wc -l)" = 1 ] \
-  || { echo "compose.yaml: ollama and models-init must use the same Ollama image" >&2; exit 1; }
+if [ "$(grep -c 'image: docker\.io/ollama/' "$root/compose.yaml")" != 2 ] || [ "$(printf '%s\n' "$image" | wc -l)" != 1 ]; then
+  echo "compose.yaml: ollama and models-init must use the same Ollama image" >&2
+  exit 1
+fi
 [[ "$image" =~ ^docker\.io/ollama/ollama:([0-9]+\.[0-9]+\.[0-9]+)@sha256:[0-9a-f]{64}$ ]] \
   || { echo "compose.yaml: the Ollama image is not ollama/ollama:<version>@sha256:<digest>: $image" >&2; exit 1; }
 image_version="${BASH_REMATCH[1]}"
