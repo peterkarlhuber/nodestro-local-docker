@@ -52,7 +52,14 @@ services:
     mem_limit: 32m
     pids_limit: 8
     stop_grace_period: 2s
-    healthcheck: {disable: true} # the image's check would ask the studio, which only shares this namespace
+    # A trivial check of its own: the image's check would ask the studio, which only shares this namespace, and
+    # `up --wait` refuses services without a health check on some Compose versions.
+    healthcheck:
+      test: ["CMD", "sleep", "0"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      start_interval: 1s
 
   gateway:
     <<: *hardening
