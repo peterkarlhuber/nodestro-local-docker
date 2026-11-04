@@ -48,6 +48,8 @@ covers the container setup.
 | `NODESTRO_LOCAL_MODELS=on` | The default: the local model server with downloads |
 | `NODESTRO_LOCAL_MODELS=offline` | The model server without downloads (`compose.local-models-offline.yaml`: Ollama's outgoing requests go to a proxy address on which nothing listens). Models come only from offline imports; downloads in the studio fail. Together with the studio's strict offline mode, the installation uses no external model service |
 | `NODESTRO_LOCAL_MODELS=off` | No model server (`compose.local-models-off.yaml`): saves the download of the Ollama image (about 3.4 GB on amd64, 2.8 GB on arm64; about 8.5 GB unpacked). Cloud providers and a model server you name yourself (the Ollama provider's base URL) still work |
+| `NODESTRO_OLLAMA_MEMORY` | The model server's memory limit (default `16g`: room for the suggested 4B and 9B models with the 32768-token context window). A model that does not fit fails to load with an Ollama error; the studio and the computer keep running |
+| `NODESTRO_OLLAMA_PIDS`, `NODESTRO_OLLAMA_CPUS` | Its process limit (default 2048) and CPU limit (default `0`: all cores; for example `4` leaves the rest to other work) |
 | `NODESTRO_IMPORT_DIR` | The host folder for offline imports (default `import/` next to the launcher), read-only in the studio as `/import` |
 
 The launcher remembers `NODESTRO_LOCAL_MODELS` (in `.nodestro/state.env`) until you set it again, so `stop`,

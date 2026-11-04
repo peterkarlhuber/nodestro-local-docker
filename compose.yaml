@@ -22,6 +22,8 @@
 # (/var/run/docker.sock; rootless Docker: $XDG_RUNTIME_DIR/docker.sock), NODESTRO_SANDBOX_MAX_CONTAINERS (4),
 # NODESTRO_BROWSER_HOST (empty: the installation's random *.localhost name; another name weakens docs/SESSIONS.md),
 # NODESTRO_IMPORT_DIR (./import: the folder for offline model imports, read-only in the studio as /import).
+# Limits: NODESTRO_MEMORY (4g), NODESTRO_PIDS (512), NODESTRO_CPUS (0: no limit) for the studio, and
+# NODESTRO_OLLAMA_MEMORY (16g), NODESTRO_OLLAMA_PIDS (2048), NODESTRO_OLLAMA_CPUS (0) for the model server.
 # The launcher's NODESTRO_LOCAL_MODELS=off leaves the model server out (compose.local-models-off.yaml), =offline keeps
 # it without internet access (compose.local-models-offline.yaml).
 name: ${NODESTRO_PROJECT:-nodestro-local}
@@ -106,6 +108,10 @@ services:
     depends_on:
       network: {condition: service_started}
       gateway: {condition: service_healthy}
+    # Limits, so that a runaway run or a large upload cannot take the whole computer (NODESTRO_CPUS=0: no limit).
+    mem_limit: ${NODESTRO_MEMORY:-4g}
+    pids_limit: ${NODESTRO_PIDS:-512}
+    cpus: ${NODESTRO_CPUS:-0}
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "-I", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4)"]
@@ -154,6 +160,15 @@ services:
     depends_on:
       network: {condition: service_started}
       models-init: {condition: service_completed_successfully}
+    # A model needs its weights plus its context window in memory: nodestro-runtime's catalog estimates 6 GB for
+    # qwen3.5:4b and 10 GB for qwen3.5:9b (the default agent and assistant models). 16g leaves room for both and keeps
+    # a larger model from taking all of the computer's memory; Docker Desktop's VM memory is a limit too. If memory
+    # runs out anyway, the kernel ends Ollama's model runner before the studio (oom_score_adj). Runners start many
+    # threads, hence the high pids_limit. NODESTRO_OLLAMA_CPUS=0: all cores.
+    mem_limit: ${NODESTRO_OLLAMA_MEMORY:-16g}
+    pids_limit: ${NODESTRO_OLLAMA_PIDS:-2048}
+    cpus: ${NODESTRO_OLLAMA_CPUS:-0}
+    oom_score_adj: 500
     stop_grace_period: 20s
     # `ollama list` asks the server and fails while it does not answer (`ollama --version` exits 0 without a server).
     healthcheck:

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Resource limits for the studio and the model server (#11). `nodestro`: 4 GB memory, 512 processes
+  (`NODESTRO_MEMORY`, `NODESTRO_PIDS`; `NODESTRO_CPUS`, default `0`: all CPUs). `ollama`: 16 GB memory, 2048 processes
+  (`NODESTRO_OLLAMA_MEMORY`, `NODESTRO_OLLAMA_PIDS`, `NODESTRO_OLLAMA_CPUS`), enough for the suggested 4B and 9B models
+  with the 32768-token context window, and `oom_score_adj` 500, so that out of memory the kernel ends Ollama's model
+  runner before the studio. The end-to-end test checks the defaults.
+
 - Ollama no longer has a container address: it runs in the network namespace of the studio and listens on
   127.0.0.1:11434 only, so the studio reaches it on the shared loopback (`NODESTRO_OLLAMA_URL=http://127.0.0.1:11434`).
   Before, any process on a Linux host with Docker Engine could reach Ollama's unauthenticated API at its container

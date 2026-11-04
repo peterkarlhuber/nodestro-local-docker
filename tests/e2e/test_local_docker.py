@@ -257,6 +257,9 @@ def test_the_containers_are_locked_down() -> None:
     holder = container("network")
     assert holder["Config"]["User"] == "65534:65534" and holder["Config"]["Entrypoint"] == ["sleep", "infinity"]
     assert holder["Mounts"] == [] and holder["HostConfig"]["Memory"] > 0
+    # The default limits (NODESTRO_MEMORY, NODESTRO_PIDS, NODESTRO_CPUS): memory and processes, all CPUs.
+    studio = container("nodestro")["HostConfig"]
+    assert (studio["Memory"], studio["PidsLimit"], studio["NanoCpus"]) == (4 * 1024**3, 512, 0)
 
 
 def test_the_aws_sdk_is_in_the_image_but_no_aws_credentials_are() -> None:
@@ -379,6 +382,9 @@ def test_the_local_model_server_is_pinned_and_locked_down() -> None:
     assert host["ReadonlyRootfs"] is True and host["Privileged"] is False
     assert host["CapDrop"] == ["ALL"] and not host["CapAdd"]
     assert "no-new-privileges:true" in host["SecurityOpt"]
+    # Default limits (NODESTRO_OLLAMA_MEMORY, _PIDS, _CPUS); out of memory, the kernel ends Ollama before the studio.
+    assert (host["Memory"], host["PidsLimit"], host["NanoCpus"]) == (16 * 1024**3, 2048, 0)
+    assert host["OomScoreAdj"] == 500
     # The image exposes 11434, but nothing is published on the host.
     assert not ollama["HostConfig"]["PortBindings"]
     env = dict(item.split("=", 1) for item in ollama["Config"]["Env"])

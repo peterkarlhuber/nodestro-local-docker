@@ -35,6 +35,8 @@ address and opens your browser. The link contains your **access key**. Keep it p
 Nodestro again at any time with `./nodestro open`, or print the link with `./nodestro link`.
 
 Nodestro listens only on `127.0.0.1` (default port 8765; another port: `NODESTRO_PORT=9000 ./nodestro start`).
+The studio container may use 4 GB of memory and 512 processes (`NODESTRO_MEMORY`, `NODESTRO_PIDS`; `NODESTRO_CPUS`
+limits its CPUs), the local model server 16 GB ([docs/LOCAL-MODELS.md](docs/LOCAL-MODELS.md)).
 Other computers on your network cannot reach it, and a browser without the access key gets only a sign-in hint.
 The link opens your installation's own host name, `nodestro-<random>.localhost`, so that other local web servers
 never receive your session cookie ([docs/SESSIONS.md](docs/SESSIONS.md)). A browser session lasts at most 24 hours
