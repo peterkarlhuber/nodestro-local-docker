@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `components.json` pins studio `0a6a320` (studio #120: nodestro-runtime `2f1de71`, orkexa `6e61862`: key figures that
+  a condition decides on, or that report money or days, must come from a tool, and the runtime checks them; the new
+  built-in `table_totals` tool; local Ollama agents with a structured result call their tools; production-downtime
+  decides on the computed 4.62 % instead of an estimate) and server `23fd4a2` (server #50: the same studio pin).
+
 - `components.json` pins studio `f9e4a91` (studio #118, #119: nodestro-runtime `7cb9b4b`, in the CPU saving mode the
   quality judge of a local thinking model also answers without the thinking phase, and the local Ollama gets 60 minutes
   per request instead of the SDK's 10, so a long answer on CPU no longer fails with a provider timeout) and server
