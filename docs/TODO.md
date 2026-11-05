@@ -158,8 +158,8 @@ None known.
 ### LD-009 · Warn when the pinned studio falls behind
 
 - **Priority:** P4 Optional · **Status:** Open · **Refs:** `components.json`, backend audit D-01
-- **What:** `components.json` pins master merge commits of studio and server (studio `2c072d7`, server `a567530`
-  since the round-3 cascade, #33), but `scripts/check-pins.sh` checks only reachability and agreement (including the
+- **What:** `components.json` pins master merge commits of studio and server (studio `a1acb1b`, server `d589e94`
+  since the manual-findings cascade of 2026-11-05), but `scripts/check-pins.sh` checks only reachability and agreement (including the
   Ollama pins since #32), not how far they lag behind the latest studio platform commit (audit round 3 OPS3-06).
 - **Next step:** Add a CI warning for pin distance; keep pinning merge commits in every cascade.
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pins nodestro-studio a1acb1b (studio #127: product findings of the manual review; runtime 57b40d2 with the strict
+  offline mode outside runs, api f796916) and nodestro-server d589e94 (server #55: RUNBOOK on batches and test series).
+
 - Pins nodestro-studio 2c072d7 (studio #123, #124: backend audit and UX round 3; api 5ee13f7, runtime 40c8c06,
   orkexa e9c2147 with the reclaim of a stale managed Ollama, axentra 0a1d1cc) and nodestro-server a567530 (server #51
   restore and upgrade fixes, #53).
