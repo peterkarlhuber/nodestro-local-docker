@@ -3,8 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-04 against `master` at `69c4a91` (internal backend audit round 3; Ollama loopback,
-> limits and pin check in the PR that updates this line).
+> **Last full review:** 2026-11-05 against `master` at `f2a0393` (quality round 3 close-out; TODO consolidated).
 
 ## Summary
 
@@ -16,8 +15,9 @@
 | P3 Low | 9 |
 | P4 Optional | 3 |
 
-**Release blockers:** None for this repository, because no Local Docker release is planned. Before any release,
-LD-001 (independent security review) and LD-002 (Docker Desktop tests) must be closed.
+**Release blockers:** None for this repository, because no Local Docker release is planned; no entry here blocks
+the next planned preview (the desktop candidate, nodestro-desktop DSK-001). Before any Local Docker release, LD-001
+(independent security review) and LD-002 (Docker Desktop tests) must be closed.
 
 Nodestro Local Docker works and is tested on Linux amd64, Linux arm64 and rootless Docker (CI end-to-end tests). The
 open work is external review, untested Docker Desktop platforms, published images and small hardening and docs items.
@@ -120,12 +120,11 @@ None known.
 - **What:** The end-to-end tests check the model server's lockdown, network and shared volume, but load no model: no
   test runs an agent or a semantic knowledge search through the container, or an offline package import from
   `/import`, because a real model is gigabytes. The default limit `NODESTRO_OLLAMA_MEMORY=16g` was checked only with
-  `qwen3:0.6b` (4.4 GB at 32768 tokens); Ollama sizes models to host memory, not to the cgroup limit, so a too-small
-  limit ends in an OOM-killed model runner (HTTP 500, services stay healthy).
+  `qwen3:0.6b` (4.4 GB at 32768 tokens; audit round 3 OPS3-05, a 9B model is untested); Ollama sizes models to host
+  memory, not to the cgroup limit, so a too-small limit ends in an OOM-killed model runner (HTTP 500, services stay
+  healthy).
 - **Next step:** Import a tiny GGUF from `/import` and run a chat and an
   embedding through the studio's API.
-
-None known beyond the platform items below.
 
 ## Platform coverage
 
@@ -152,13 +151,16 @@ None known beyond the platform items below.
 
 ## Documentation
 
+None known.
+
 ## Technical debt
 
 ### LD-009 · Warn when the pinned studio falls behind
 
 - **Priority:** P4 Optional · **Status:** Open · **Refs:** `components.json`, backend audit D-01
-- **What:** `components.json` now pins master merge commits of studio and server (re-pinned with the Live Run Chat cascade), but `scripts/check-pins.sh` checks only
-  reachability and agreement, not how far they lag behind the latest studio platform commit.
+- **What:** `components.json` pins master merge commits of studio and server (studio `2c072d7`, server `a567530`
+  since the round-3 cascade, #33), but `scripts/check-pins.sh` checks only reachability and agreement (including the
+  Ollama pins since #32), not how far they lag behind the latest studio platform commit (audit round 3 OPS3-06).
 - **Next step:** Add a CI warning for pin distance; keep pinning merge commits in every cascade.
 
 ## Later optimizations
