@@ -202,6 +202,7 @@ None known.
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
+| (pointer) | nodestro-studio | ST-052 (Dependabot policy: weekly groups, cooldown, manual merge; auto-merge prerequisites) | Full entry in studio |
 | LD-001 | nodestro-runtime | `sandbox_gateway.py` (gateway code), RT-003 | Review covers code there |
 | LD-012 | nodestro-runtime | RT-003 (optional forced gVisor runtime; second check of created containers' limits) | Hardening owned there |
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
