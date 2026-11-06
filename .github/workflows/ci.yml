@@ -38,10 +38,19 @@ jobs:
           docker compose -f compose.yaml -f tests/compose.test.yaml config -q
           docker compose -f compose.yaml -f compose.local-models-off.yaml config -q
           docker compose -f compose.yaml -f compose.local-models-offline.yaml config -q
+          NODESTRO_HTTPS_PROXY=http://proxy.example:3128 docker compose -f compose.yaml -f compose.proxy.yaml config -q
+      - name: Compose files the launchers choose (a stand-in docker; bash and PowerShell 7)
+        run: |
+          python3 -m venv /tmp/launcher-venv
+          /tmp/launcher-venv/bin/pip install -q pytest==8.4.2
+          /tmp/launcher-venv/bin/python -m pytest tests/launcher -v -p no:cacheprovider
       - name: Test code
         run: pipx run ruff==0.14.0 check tests
       - name: Pins (full SHAs on master, studio pins agree, Ollama image = Orkexa's Ollama)
         run: scripts/check-pins.sh
+      - name: Pins are not behind studio and server master (a warning, never blocking)
+        continue-on-error: true
+        run: scripts/pin-distance.sh
 
   windows-launcher:
     # Windows runners have no Linux containers, so this only runs the launcher's own code on real Windows PowerShell.
