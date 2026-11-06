@@ -133,8 +133,18 @@ jobs:
 
   rootless:
     # Rootless Docker, the recommended Linux setup: the daemon runs as the runner user with cgroup v2 delegation
-    # (memory, CPU, processes), so the gateway's limits are enforced. Rootful Docker only builds the image.
-    runs-on: ubuntu-24.04
+    # (memory, CPU, processes), so the gateway's limits are enforced. Rootful Docker only builds the image. On amd64
+    # and arm64 (LD-006).
+    name: rootless (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-amd64
+            runner: ubuntu-24.04
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,7 +159,7 @@ jobs:
           # its dockerd (the setup tool looks for dockerd in its own folder).
           version="$(docker version --format '{{.Server.Version}}')"
           dir="$(dirname "$(command -v dockerd)")"
-          curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-rootless-extras-${version}.tgz" \
+          curl -fsSL "https://download.docker.com/linux/static/stable/$(uname -m)/docker-rootless-extras-${version}.tgz" \
             | sudo tar -xz -C "$dir" --strip-components=1
           ls -l "$dir"/dockerd-rootless*.sh "$dir"/rootlesskit
           # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; rootlesskit needs them.
