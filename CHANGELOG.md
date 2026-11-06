@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 5c0fbd8 (studio #140, TODO abatement round 2: api 56fa762, sdk 1306cbe) and nodestro-server
+  9d918aa (server #61: the same studio pin).
 - Pins nodestro-studio 39fb164 (studio #136, TODO abatement round) and nodestro-server ddd095f (server #59: image
   vulnerability scan, paired backups, pin distance script).
 - Proxy settings: `NODESTRO_HTTPS_PROXY` (and `NODESTRO_NO_PROXY`) in the launchers' environment layer
