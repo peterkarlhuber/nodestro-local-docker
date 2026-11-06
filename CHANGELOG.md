@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 58bb17d (studio #135: settings, attachments and providers round; orkexa 566aa3c, runtime
+  62527d1, api a799912) and nodestro-server 453fb26 (server #58: the same studio pin).
+
 - Pins nodestro-studio a1acb1b (studio #127: product findings of the manual review; runtime 57b40d2 with the strict
   offline mode outside runs, api f796916) and nodestro-server d589e94 (server #55: RUNBOOK on batches and test series).
 
