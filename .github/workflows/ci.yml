@@ -134,7 +134,7 @@ jobs:
   rootless:
     # Rootless Docker, the recommended Linux setup: the daemon runs as the runner user with cgroup v2 delegation
     # (memory, CPU, processes), so the gateway's limits are enforced. Rootful Docker only builds the image. On amd64
-    # and arm64 (LD-006).
+    # and arm64.
     name: rootless (${{ matrix.platform }})
     strategy:
       fail-fast: false
