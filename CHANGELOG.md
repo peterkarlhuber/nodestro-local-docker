@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 39fb164 (studio #136, TODO abatement round) and nodestro-server ddd095f (server #59: image
+  vulnerability scan, paired backups, pin distance script).
 - Proxy settings: `NODESTRO_HTTPS_PROXY` (and `NODESTRO_NO_PROXY`) in the launchers' environment layer
   `compose.proxy.yaml`, which gives the studio and the model server `HTTPS_PROXY`/`HTTP_PROXY` and a `NO_PROXY` that
   always keeps loopback direct (README, docs/LOCAL-MODELS.md). A launcher test checks the compose file order with a

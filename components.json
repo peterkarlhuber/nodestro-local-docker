@@ -1,5 +1,5 @@
 {
   "comment": "What Nodestro Local Docker is built from, each by full commit SHA. nodestro-studio pins every component (runtime, api, examples, integrations, orkexa); nodestro-server holds the shared image definition (image/Dockerfile, target `local`).",
-  "nodestro-studio": "58bb17d013072825906da4d7198e06cc8fc719e5",
-  "nodestro-server": "453fb269802254dbaff809264fabe4146912cd5d"
+  "nodestro-studio": "39fb1643f8f8506568a1f6899df22ae0859593a3",
+  "nodestro-server": "ddd095f6e6db506c087cd9aaa6cd22c2f5021376"
 }
