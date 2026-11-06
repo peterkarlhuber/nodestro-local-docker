@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Proxy settings: `NODESTRO_HTTPS_PROXY` (and `NODESTRO_NO_PROXY`) in the launchers' environment layer
+  `compose.proxy.yaml`, which gives the studio and the model server `HTTPS_PROXY`/`HTTP_PROXY` and a `NO_PROXY` that
+  always keeps loopback direct (README, docs/LOCAL-MODELS.md). A launcher test checks the compose file order with a
+  fake `docker`.
+- CI runs nodestro-server's vulnerability scan on the built image (`scripts/scan-image.sh`, reports as artifacts)
+  and warns when the studio pin lags behind studio master (`scripts/pin-distance.sh`); both skip until the server
+  pin includes the server's scripts.
+- The rootless Docker job runs on Linux arm64 too (docs/PLATFORMS.md).
+
 - Pins nodestro-studio 58bb17d (studio #135: settings, attachments and providers round; orkexa 566aa3c, runtime
   62527d1, api a799912) and nodestro-server 453fb26 (server #58: the same studio pin).
 
