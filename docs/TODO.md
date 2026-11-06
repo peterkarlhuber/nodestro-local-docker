@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-05 against `master` at `f2a0393` (quality round 3 close-out; TODO consolidated).
+> **Last full review:** 2026-11-06 against `master` at `fa25f35` (TODO abatement round).
 
 ## Summary
 
@@ -12,8 +12,8 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 9 |
-| P4 Optional | 3 |
+| P3 Low | 7 |
+| P4 Optional | 2 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned; no entry here blocks
 the next planned preview (the desktop candidate, nodestro-desktop DSK-001). Before any Local Docker release, LD-001
@@ -81,14 +81,6 @@ None known.
 - **Next step:** Owner decides on publishing (registry, signing, channel); then add a publish workflow like
   nodestro-server's and let the launcher pull by digest.
 
-### LD-007 · Proxy settings for the studio container
-
-- **Priority:** P3 Low · **Status:** Open · **Refs:** `compose.yaml`, `compose.extra-ca.yaml`, Bedrock deployment analysis section 3
-- **What:** `HTTPS_PROXY`/`NO_PROXY` are not passed to the `nodestro` and `ollama` services, so model providers and
-  Ollama model downloads behind a mandatory proxy work only with a hand-written `compose.override.yaml` (`NO_PROXY`
-  must then contain `ollama`). The CA overlay exists already and covers `ollama` too.
-- **Next step:** Pass the proxy variables through when they are set (or document the override), and cover it in the docs.
-
 ### LD-011 · MCP servers on the host's localhost
 
 - **Priority:** P4 Optional · **Status:** Open · **Refs:** README "Known limitations"
@@ -143,25 +135,13 @@ None known.
   name; the end-to-end tests check the server side only. Real model providers were not used either.
 - **Next step:** Open a session in Safari and Firefox and record the result in `docs/SESSIONS.md`.
 
-### LD-006 · Rootless Docker on arm64
-
-- **Priority:** P3 Low · **Status:** Open · **Refs:** `docs/PLATFORMS.md`
-- **What:** Rootless Docker is tested only on x86_64; there is no arm64 rootless CI job.
-- **Next step:** Add the `rootless` job on `ubuntu-24.04-arm`.
-
 ## Documentation
 
 None known.
 
 ## Technical debt
 
-### LD-009 · Warn when the pinned studio falls behind
-
-- **Priority:** P4 Optional · **Status:** Open · **Refs:** `components.json`, backend audit D-01
-- **What:** `components.json` pins master merge commits of studio and server (studio `a1acb1b`, server `d589e94`
-  since the manual-findings cascade of 2026-11-05), but `scripts/check-pins.sh` checks only reachability and agreement (including the
-  Ollama pins since #32), not how far they lag behind the latest studio platform commit (audit round 3 OPS3-06).
-- **Next step:** Add a CI warning for pin distance; keep pinning merge commits in every cascade.
+None known.
 
 ## Later optimizations
 
@@ -206,10 +186,9 @@ None known.
 | LD-001 | nodestro-runtime | `sandbox_gateway.py` (gateway code), RT-003 | Review covers code there |
 | LD-012 | nodestro-runtime | RT-003 (optional forced gVisor runtime; second check of created containers' limits) | Hardening owned there |
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
-| – | nodestro-server | SRV-003 image vulnerability scan (same image definition, target `local`) | Covers this image |
+| (pointer) | nodestro-server | `scripts/scan-vulnerabilities.sh`, `scripts/pin_distance.py` | `scripts/scan-image.sh` and `scripts/pin-distance.sh` run them at the pinned server commit (they skip until the pin includes them) |
 | – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
 | LD-018 | nodestro-runtime, nodestro-studio | Local models (`docs/local-models.md`), studio pin | Needs the pin |
-| LD-009 | nodestro-server, nodestro-desktop | SRV-016, DSK-013 (pin distance warning) | Same check in all three |
 
 ## CI access to private repositories
 

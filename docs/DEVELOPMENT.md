@@ -7,13 +7,16 @@
 | `components.json` | The two full commit SHAs an image is built from (nodestro-studio, nodestro-server) |
 | `compose.yaml` | The installation: services `nodestro` and `gateway`, volumes `data` and `sandbox-socket` |
 | `compose.extra-ca.yaml` | Trust a TLS-inspecting proxy's CA (added by the launcher with `NODESTRO_EXTRA_CA_FILE`) |
+| `compose.proxy.yaml` | An HTTP(S) proxy for the studio and the model server (added by the launcher with `NODESTRO_HTTPS_PROXY`) |
 | `compose.override.yaml` | Not in the repository: the user's own additions (provider keys, AWS credentials; README), added by the launcher when present |
 | `nodestro`, `nodestro.ps1` | Launchers for Linux/macOS and Windows |
 | `scripts/build-image.sh` | Builds the image: nodestro-server's `image/Dockerfile`, target `local`, at the pinned commits |
 | `scripts/check-pins.sh` | Checks that both SHAs are on master and that the studio's own pins agree |
-| `scripts/scan-image.sh` | Secret scan of every image layer (nodestro-server's `scan_secrets.py`) |
+| `scripts/scan-image.sh` | Secret scan of every image layer (nodestro-server's `scan_secrets.py`) and, from a server pin that has it, the vulnerability scan (`scan-vulnerabilities.sh`: pip-audit and Trivy) |
 | `scripts/manifest.sh` | Image manifest and license inventory (nodestro-server's `release_manifest.py`) |
 | `tests/e2e/` | End-to-end tests against the real image, compose file and launcher on a real Docker |
+| `tests/launcher/` | The compose files the launchers choose (a stand-in `docker`), and how the files merge (`docker compose config`) |
+| `scripts/pin-distance.sh` | Warns when the pins lag behind studio or server master (nodestro-server's `pin_distance.py`) |
 | `tests/model-stub/`, `tests/compose.test.yaml` | An OpenAI-compatible model stub for runs that call tools, for tests only |
 
 There is no Nodestro logic here. A change to how Nodestro behaves belongs in the repository that owns it (see

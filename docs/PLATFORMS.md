@@ -12,7 +12,7 @@ listed as untested when no test environment was available, even if it is expecte
 | macOS Intel, Docker Desktop | linux/amd64 | **Untested** | No Mac was available. |
 | Linux x86_64, rootless Docker (cgroup v2) | linux/amd64 | **Tested, recommended** | All end-to-end tests on rootless Docker 28 with systemd and cgroup v2 delegation (memory, CPU, processes), CI job `rootless` on `ubuntu-24.04`. First run: 2026-10-31. The launcher finds the socket itself. See [Rootless Docker](#rootless-docker). |
 | Linux, rootless Docker without cgroup v2 | either | **Refused** | The daemon drops memory, CPU and process limits there (cgroup v1, or no systemd user session). Since nodestro-runtime #37 the gateway refuses to start tool code on such a daemon. Development machine (cgroup v1): the studio runs, tools are blocked. |
-| Linux arm64, rootless Docker | linux/arm64 | **Untested** | Expected to behave like x86_64; no CI job yet. |
+| Linux arm64, rootless Docker | linux/arm64 | **Untested** | Expected to behave like x86_64. The CI job `rootless (linux-arm64)` on `ubuntu-24.04-arm` (added 2026-11-06) runs the same setup and tests; this row changes with its first passing run. |
 | Podman, other engines | | **Not supported** | The gateway speaks the Docker Engine API of a Docker daemon. |
 
 ## What has to be checked on an untested platform

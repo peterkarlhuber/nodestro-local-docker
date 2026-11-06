@@ -31,6 +31,8 @@ Settings (environment variables):
   NODESTRO_PORT               Port on 127.0.0.1 (default 8765)
   NODESTRO_NO_BROWSER=1       Print the link instead of opening a browser
   NODESTRO_EXTRA_CA_FILE      Certificate bundle of a TLS-inspecting proxy
+  NODESTRO_HTTPS_PROXY        Proxy for outgoing requests (model providers, packages, model downloads), as the
+                              containers reach it (not 127.0.0.1); NODESTRO_NO_PROXY: more hosts to reach directly
   NODESTRO_UPDATE_IMAGE       Image for update (default: build from the pinned sources)
   NODESTRO_PROJECT            Compose project name (default nodestro-local)
   NODESTRO_STATE_DIR          Where the launcher keeps its state (default .nodestro next to it)
@@ -87,6 +89,8 @@ function Save-State {
 function Invoke-Compose {
     $files = @("-f", (Join-Path $Here "compose.yaml"))
     if ($env:NODESTRO_EXTRA_CA_FILE) { $files += @("-f", (Join-Path $Here "compose.extra-ca.yaml")) }
+    # Before the offline file, which closes Ollama's downloads again.
+    if ($env:NODESTRO_HTTPS_PROXY) { $files += @("-f", (Join-Path $Here "compose.proxy.yaml")) }
     if ($env:NODESTRO_LOCAL_MODELS -eq "off") { $files += @("-f", (Join-Path $Here "compose.local-models-off.yaml")) }
     if ($env:NODESTRO_LOCAL_MODELS -eq "offline") { $files += @("-f", (Join-Path $Here "compose.local-models-offline.yaml")) }
     # The user's own additions (README: model providers), as plain `docker compose` would read them.

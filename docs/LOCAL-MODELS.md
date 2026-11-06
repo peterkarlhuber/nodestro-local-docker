@@ -64,4 +64,5 @@ Copy the files into the `import` folder, then choose them in the studio (Setting
 - a **GGUF file** (and an optional vision projector), which the studio hands to Ollama to create a model.
 
 Behind a TLS-inspecting proxy, `NODESTRO_EXTRA_CA_FILE` also gives Ollama the proxy's certificate authority for
-downloads. A proxy that needs `HTTPS_PROXY` can be set for the `ollama` service in `compose.override.yaml` (LD-007).
+downloads. Behind a mandatory proxy, `NODESTRO_HTTPS_PROXY` gives the model server (and the studio) the proxy for downloads
+(`compose.proxy.yaml`, README "Model providers"); `NODESTRO_LOCAL_MODELS=offline` still closes them.

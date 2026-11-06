@@ -71,6 +71,15 @@ next to `compose.yaml` (the launcher adds it when it exists; it is not part of t
 TLS-inspecting proxy, set `NODESTRO_EXTRA_CA_FILE` to its certificate bundle (this also sets `AWS_CA_BUNDLE`,
 because the AWS SDK ignores `SSL_CERT_FILE`).
 
+Behind a mandatory HTTP(S) proxy, set `NODESTRO_HTTPS_PROXY` to its address as the containers reach it (its host
+name or address on the network, or `host.docker.internal` on Docker Desktop; `127.0.0.1` would be the container
+itself), and optionally `NODESTRO_NO_PROXY` to more hosts that are reached directly. The launcher then adds
+`compose.proxy.yaml`, which gives the studio (model providers, package downloads for tool environments) and the local
+model server (model downloads) `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` (always with `127.0.0.1,localhost,::1`, so
+the studio's calls to the model server on the shared loopback never go to the proxy). With
+`NODESTRO_LOCAL_MODELS=offline` the model server's downloads stay closed. Image builds of tool environments run on
+your Docker daemon, which needs its own proxy settings (Docker's `daemon.json` or Docker Desktop's proxy settings).
+
 **Amazon Bedrock (AWS)** has no API key and uses only the AWS default credential chain inside the `nodestro`
 container. By default the container has **no AWS credentials**: no `AWS_*` variables and no `~/.aws`. To use
 Bedrock, give it credentials in `compose.override.yaml`, either as a read-only mount of your `~/.aws`:
