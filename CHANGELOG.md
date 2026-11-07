@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 5318cea (studio #153, MUP-ONA B4 cascade: runtime df4aeb3 with the tenant SQL rule engine,
+  the statement catalog and partition guard; examples c9ef422, integrations fe2fa12, api e5b5281, sdk d372eee) and
+  nodestro-server c488f1d (server #70: the same studio pin; server #71: the image's base stage installs the Debian
+  security updates, which fixes the zlib1g CVEs CVE-2026-76844 and CVE-2026-85091 the image scan reported). Behavior
+  unchanged.
 - Pins nodestro-studio 9c0a6bd (studio #149, MUP-ONA B2 cascade: runtime d9c3d6e with orkexa 028faa1 and Axentra
   60d83b3, api 44212bc, sdk bda96c1) and nodestro-server a5f3af3 (server #68: the same studio pin, RUNBOOK rows for the
   PDF reading limits).
