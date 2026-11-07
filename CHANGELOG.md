@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- End-to-end tests: the sandbox tests wait until the studio's Docker sandbox is approved (`GET /api/sandbox/status`)
+  instead of racing its first check, and the studio is no longer restarted while that check builds the sandbox
+  image (a CI run had failed with `sandbox.isolation_required`, `docker-image`; LD-020 tracks the product side). CI
+  uploads the container logs when an end-to-end run fails.
+
 - Pins nodestro-studio 5c0fbd8 (studio #140, TODO abatement round 2: api 56fa762, sdk 1306cbe) and nodestro-server
   9d918aa (server #61: the same studio pin).
 - Pins nodestro-studio 39fb164 (studio #136, TODO abatement round) and nodestro-server ddd095f (server #59: image

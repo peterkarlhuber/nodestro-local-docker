@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-06 against `master` at `fa25f35` (TODO abatement round).
+> **Last full review:** 2026-11-07 against `master` at `cc4d2af` (TODO abatement round 4).
 
 ## Summary
 
@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 7 |
+| P3 Low | 8 |
 | P4 Optional | 2 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned; no entry here blocks
@@ -61,7 +61,20 @@ None known for a planned release (see the summary).
 
 ## Bugs and reliability
 
-None known.
+### LD-020 · A studio restart during the first sandbox image build blocks tool code for five minutes
+
+- **Priority:** P3 Low · **Status:** Open · **Refs:** CI run 42302847118 (attempt 1, image linux-amd64, 2026-11-06),
+  nodestro-runtime `docker_status.py` (`RETRY_FAILED`), `sandbox_gateway.py` (`max_builds`)
+- **What:** After a start the studio checks the Docker sandbox in the background, and the first check builds the
+  sandbox's runtime image (`nodestro-env:<key>`) through the gateway, which runs one build at a time and refuses a
+  second one (HTTP 429). When the studio restarts during that build (a crash, `docker restart`, an update), the
+  restarted studio's check most likely meets the abandoned build and is refused; the runtime counts that as
+  `docker-image` and checks again only after five minutes. Until then tool code is refused with
+  `sandbox.isolation_required` (Settings, Sandbox, "Check again" helps once the old build ended). The end-to-end
+  tests no longer restart the studio during the build (they wait for the approved sandbox first).
+- **Next step:** In nodestro-runtime, treat a refused concurrent build as `checking` and retry it soon (or let the
+  gateway queue builds); then a test that restarts the studio during the first build.
+- **Depends on:** nodestro-runtime
 
 ## Architecture and modularity
 
@@ -188,6 +201,7 @@ None known.
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
 | (pointer) | nodestro-server | `scripts/scan-vulnerabilities.sh`, `scripts/pin_distance.py` | `scripts/scan-image.sh` and `scripts/pin-distance.sh` run them at the pinned server commit (they skip until the pin includes them) |
 | – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
+| LD-020 | nodestro-runtime | `docker_status.py`, `sandbox_gateway.py` (image build retry) | Fix there |
 | LD-018 | nodestro-runtime, nodestro-studio | Local models (`docs/local-models.md`), studio pin | Needs the pin |
 
 ## CI access to private repositories
