@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pins nodestro-studio c41e3c2 (studio #157, MUP-ONA B6 cascade: runtime 81b0f55, where the knowledge base, file store
+  and memory run on orkexa's PostgreSQL backends (orkexa 792a041); api 05e0232) and nodestro-server 89fa4af (server
+  #74: the same studio pin, RUNBOOK for `storage.schema_mismatch`). The local profile installs no PostgreSQL backend;
+  behavior unchanged.
 - Pins nodestro-studio 5318cea (studio #153, MUP-ONA B4 cascade: runtime df4aeb3 with the tenant SQL rule engine,
   the statement catalog and partition guard; examples c9ef422, integrations fe2fa12, api e5b5281, sdk d372eee) and
   nodestro-server c488f1d (server #70: the same studio pin; server #71: the image's base stage installs the Debian
