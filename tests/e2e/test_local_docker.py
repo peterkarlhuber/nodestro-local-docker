@@ -18,6 +18,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any
 import urllib.error
@@ -274,14 +275,40 @@ def installation() -> Iterator[None]:
 # ---- the first sandbox check ----------------------------------------------------------------------------------------
 # First in this file: on a fresh daemon the studio is still building the sandbox's runtime image now.
 
-#: A running step of the runtime image's build: the classic builder runs each RUN step of nodestro-runtime's Dockerfile
-#: (``pip download`` / ``pip install`` with ``--require-hashes``) in a container of its own, which ``docker ps`` lists.
+#: A step of the runtime image's build: the classic builder runs each RUN step of nodestro-runtime's Dockerfile
+#: (``pip download`` / ``pip install`` with ``--require-hashes``) in a container of its own.
 BUILD_STEP = re.compile(r"python -m pip (download|install) .*--require-hashes")
 
 
-def _image_build_running() -> bool:
-    commands = docker("ps", "--no-trunc", "--format", "{{.Command}}").stdout.splitlines()
-    return any(BUILD_STEP.search(command) for command in commands)
+class BuildSteps:
+    """Watches Docker's container events and notes when a RUN step of the runtime image's build starts.
+
+    A rebuild can be short: with the classic builder on Docker's graph-driver store (Docker 28, the CI runners'
+    rootless daemon), removing the image leaves the download stage's layers as build cache, so a rebuild reruns only
+    the offline ``pip install`` step, a few seconds. Polling ``docker ps`` while waiting for the restarted studio
+    missed that step in CI; the event stream misses no container, and each one is inspected while it exists."""
+
+    def __init__(self) -> None:
+        self.seen = threading.Event()
+        self._events = subprocess.Popen(
+            ["docker", "events", "--filter", "type=container", "--filter", "event=create", "--format", "{{.Actor.ID}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        self._reader = threading.Thread(target=self._read, daemon=True)
+        self._reader.start()
+
+    def _read(self) -> None:
+        assert self._events.stdout is not None
+        for line in self._events.stdout:
+            found = docker("inspect", "--format", "{{json .Config.Cmd}}", line.strip(), check=False).stdout
+            if BUILD_STEP.search(" ".join(json.loads(found or "null") or [])):
+                self.seen.set()
+
+    def close(self) -> None:
+        self._events.kill()
+        self._events.wait(timeout=30)
 
 
 def _sandbox_starts(since: float, attribute: str) -> list[str]:
@@ -303,13 +330,27 @@ def _sandbox_images(since: float) -> set[str]:
 def _remove_sandbox_images(images: set[str]) -> None:
     """Remove the runtime image(s) the studio's self-test used, by all their tags, so the next check builds anew.
 
-    ``nodestro-env`` images are a cache the runtime rebuilds on demand (and evicts itself); the classic builder keeps
-    no layer cache for a removed image, so the rebuild runs every step again."""
+    ``nodestro-env`` images are a cache the runtime rebuilds on demand (and evicts itself). The build cache of the
+    download stage may stay (see :class:`BuildSteps`); the install step runs again either way."""
     assert images, "the approved sandbox started no container of this installation (self-test)"
     for image in images:
         tags = json.loads(docker("image", "inspect", "--format", "{{json .RepoTags}}", image).stdout or "[]") or []
         assert all(tag.startswith("nodestro-env:") for tag in tags), tags
         docker("rmi", *(tags or [image]))
+        assert docker("image", "inspect", image, check=False).returncode != 0, f"{image} is still on the daemon"
+
+
+def _sandbox_state(client: Client) -> dict[str, Any] | None:
+    """The sandbox status, or ``None`` while the studio does not answer (it is restarting)."""
+    try:
+        status, body, _ = client.get("/api/sandbox/status", timeout=10)
+    except (OSError, urllib.error.URLError):
+        return None
+    if status in (401, 502, 503):  # a session of the studio before its restart, or not up yet
+        return None
+    assert status == 200, body
+    assert body["state"] in ("checking", "approved"), f"the Docker sandbox was refused: {body}"
+    return dict(body)
 
 
 def test_tool_code_runs_after_a_studio_restart_during_the_first_sandbox_image_build() -> None:
@@ -320,27 +361,30 @@ def test_tool_code_runs_after_a_studio_restart_during_the_first_sandbox_image_bu
     # `docker-image`). Whether the 429 occurs depends on how fast the daemon cancels the abandoned build; the end
     # state is the same and is what this test requires: approved without ever being `unavailable`, then tool code
     # runs in sandbox containers.
-    client = browser()
-    forced = False
-    deadline = time.monotonic() + 900
-    while not _image_build_running():
-        assert time.monotonic() < deadline, "the studio's first sandbox check never built the runtime image"
-        status, body, _ = client.get("/api/sandbox/status")
-        assert status == 200, body
-        assert body["state"] in ("checking", "approved"), f"the Docker sandbox was refused: {body}"
-        if body["state"] == "approved":
-            # The image existed already (a second run on this daemon) or was built before this test began: remove
-            # it and restart the studio, so its first check after the start builds it again.
-            assert not forced, f"the restarted studio was approved without building the removed image: {body}"
-            forced = True
-            _remove_sandbox_images(_sandbox_images(STARTED))
-            docker("restart", container("nodestro")["Id"])
-            wait_healthy("nodestro")
-            client = browser()
-            continue
-        time.sleep(0.25)
-    restarted = time.time() - 1
-    docker("restart", container("nodestro")["Id"])
+    steps = BuildSteps()
+    try:
+        client = browser()
+        forced = False
+        deadline = time.monotonic() + 900
+        while not steps.seen.wait(0.1):
+            assert time.monotonic() < deadline, "the studio's sandbox check never built the runtime image"
+            body = _sandbox_state(client)
+            if body is None:
+                if container("nodestro")["State"].get("Health", {}).get("Status") == "healthy":
+                    client = browser()
+                continue
+            if body["state"] == "approved":
+                # The image existed already (a second run on this daemon) or was built before this test began:
+                # remove it and restart the studio, so its first check after the start builds it again.
+                assert not forced, f"the restarted studio was approved without building the removed image: {body}"
+                forced = True
+                _remove_sandbox_images(_sandbox_images(STARTED))
+                docker("restart", container("nodestro")["Id"])
+                continue
+        restarted = time.time() - 1
+        docker("restart", container("nodestro")["Id"])  # while the build step runs
+    finally:
+        steps.close()
     wait_healthy("nodestro")
     client = browser()
     sandbox_approved(client)  # fails at once on `unavailable` (the five-minute block this test guards against)
@@ -355,8 +399,10 @@ def test_tool_code_runs_after_a_studio_restart_during_the_first_sandbox_image_bu
     status, answer, _ = client.post("/api/tools/shout_after_restart/run", {"input": {"text": "rebuilt"}}, timeout=600)
     assert status == 200, answer
     assert answer == {"output": "REBUILT!", "is_error": False}, answer
+    # The restarted studio's self-test (``orkexa-selftest-*``) and the tool's containers.
     started = _sandbox_containers(restarted)
-    assert started and all(name.startswith(("orkexa-sandbox-", "nodestro-sandbox-")) for name in started), started
+    assert all(name.startswith(("orkexa-selftest-", "orkexa-sandbox-", "nodestro-sandbox-")) for name in started)
+    assert any(name.startswith(("orkexa-sandbox-", "nodestro-sandbox-")) for name in started), started
 
 
 # ---- installation and network --------------------------------------------------------------------------------------
