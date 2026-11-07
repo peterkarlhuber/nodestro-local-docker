@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-07 against `master` at `cc4d2af` (TODO abatement round 4).
+> **Last full review:** 2026-11-07 against `master` at `4c5d91e` (TODO abatement round 5; the branch of PR #42).
 
 ## Summary
 
@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 8 |
+| P3 Low | 7 |
 | P4 Optional | 2 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned; no entry here blocks
@@ -61,17 +61,7 @@ None known for a planned release (see the summary).
 
 ## Bugs and reliability
 
-### LD-020 · No end-to-end test restarts the studio during the first sandbox image build
-
-- **Priority:** P3 Low · **Status:** Open · **Refs:** CI run 42302847118 (attempt 1, image linux-amd64, 2026-11-06),
-  nodestro-runtime `docker_status.py`, runtime #126 (`ae7f682`, `5701719`)
-- **What:** The product side is fixed since the pin of nodestro-studio f69020a (runtime f26dac4): when the sandbox
-  gateway refuses the runtime image's build because another build runs (HTTP 429, e.g. the first `nodestro-env` build
-  of a studio that was restarted meanwhile), the Docker backend stays `checking` and retries after 5 to 60 seconds
-  instead of refusing tool code with `sandbox.isolation_required` for five minutes. The runtime tests this with a
-  fake gateway; the end-to-end tests here wait for the approved sandbox and never restart the studio mid-build.
-- **Next step:** An end-to-end test that restarts the studio container during the first image build and expects tool
-  code to run once the build ends.
+None known.
 
 ## Architecture and modularity
 
