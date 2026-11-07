@@ -169,6 +169,33 @@ class Client:
         return self.request("PUT", path, body, **options)
 
 
+def sandbox_approved(client: Client, *, timeout: float = 900) -> dict[str, Any]:
+    """Wait until the studio's Docker sandbox passed its preflight and in-container self-test (``approved``).
+
+    The studio checks the sandbox in the background after every start; the first check builds the sandbox's
+    runtime image (``nodestro-env:<key>``) through the gateway, which takes a minute or more on a fresh daemon.
+    Until then untrusted tool code is refused with ``sandbox.isolation_required``. Only ``checking`` is waited
+    for: a check that ended ``unavailable`` (any reason, ``docker-image`` included) fails here with its detail
+    and the checks behind it, not as a refused tool later."""
+    deadline = time.monotonic() + timeout
+    while True:
+        status, body, _ = client.get("/api/sandbox/status?wait=5", timeout=60)
+        assert status == 200, body
+        if body["state"] == "approved":
+            return dict(body)
+        assert body["state"] == "checking", f"the Docker sandbox was refused: {body}"
+        assert time.monotonic() < deadline, f"the Docker sandbox was not approved within {timeout:.0f} s: {body}"
+        time.sleep(1)
+
+
+def sandbox_image() -> str:
+    """The tag of the sandbox's runtime image (it exists once the sandbox was approved)."""
+    images = docker("images", "--format", "{{.Repository}}:{{.Tag}}").stdout.split()
+    tags = [image for image in images if re.fullmatch(r"nodestro-env:[0-9a-f]{32}", image)]
+    assert tags, f"no nodestro-env image on the daemon: {images}"
+    return tags[0]
+
+
 def link() -> str:
     return str(compose("exec", "-T", "nodestro", "nodestro-local", "link", "--port", str(PORT)).stdout.decode().strip())
 
@@ -432,6 +459,10 @@ def test_only_the_studio_reaches_the_model_server_on_the_shared_loopback() -> No
 def test_the_model_server_stays_reachable_when_the_studio_restarts() -> None:
     # Both join the namespace of `network`; a restart of one (crash, OOM, `docker restart`) does not strand the other
     # in a namespace that no longer has the studio (which a direct network_mode: service:nodestro would).
+    # Not in the middle of the first sandbox check: a restart then abandons the runtime image build, which the
+    # gateway's single build slot may still hold when the restarted studio checks (refused, docker-image, retried
+    # after five minutes), and the tool tests below would find no sandbox (CI image linux-amd64, 2026-11-06).
+    sandbox_approved(browser())
     docker("restart", container("nodestro")["Id"])
     wait_for(
         lambda: container("nodestro")["State"].get("Health", {}).get("Status") == "healthy",
@@ -473,6 +504,7 @@ def _sandbox_containers(since: float) -> list[str]:
 
 def test_tool_code_runs_only_in_locked_down_sandbox_containers() -> None:
     client = browser()
+    sandbox_approved(client)  # checked again after every start of the studio (the restart test above)
     since = time.time() - 1
     status, saved, _ = client.post(
         "/api/tools", {"function_name": "shout", "code": TOOL, "tests": TOOL_TESTS}, timeout=900
@@ -525,8 +557,7 @@ def test_tool_code_runs_only_in_locked_down_sandbox_containers() -> None:
     # ``nodestro-sandbox-*`` are the runtime's own (dependency checks). Both carry this installation's label.
     prefixes = ("orkexa-sandbox-", "nodestro-sandbox-")
     assert len(started) >= 3 and all(name.startswith(prefixes) for name in started), started
-    images = docker("images", "--format", "{{.Repository}}:{{.Tag}}").stdout.split()
-    assert any(re.fullmatch(r"nodestro-env:[0-9a-f]{32}", image) for image in images), images
+    sandbox_image()
 
 
 def test_the_studio_cannot_escape_through_the_gateway() -> None:
@@ -535,8 +566,8 @@ def test_the_studio_cannot_escape_through_the_gateway() -> None:
         assert found.returncode != 0, args
         return str(found.stderr.decode())
 
-    tag = next(image for image in docker("images", "--format", "{{.Repository}}:{{.Tag}}").stdout.split()
-               if image.startswith("nodestro-env:"))  # fmt: skip
+    sandbox_approved(browser())
+    tag = sandbox_image()
     for args in (
         ("run", "--rm", "--privileged", tag, "true"),
         ("run", "--rm", "-v", "/:/host", tag, "true"),

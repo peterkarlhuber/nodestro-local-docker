@@ -109,6 +109,15 @@ jobs:
         run: |
           pwsh -Version
           /tmp/venv/bin/python -m pytest tests/e2e -v -p no:cacheprovider
+      - name: Container logs of a failed end-to-end run
+        # The tests write every service's log (studio, gateway, model server) to the temporary folder at the end.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs-${{ matrix.platform }}
+          path: /tmp/nodestro-e2e.log
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Secret and vulnerability scan of every layer
         run: |
           /tmp/venv/bin/pip install -q pip-audit==2.10.1
@@ -193,6 +202,15 @@ jobs:
           python3 -m venv /tmp/venv
           /tmp/venv/bin/pip install -q pytest==8.4.2
           /tmp/venv/bin/python -m pytest tests/e2e -v -p no:cacheprovider
+      - name: Container logs of a failed end-to-end run
+        # The tests write every service's log (studio, gateway, model server) to the temporary folder at the end.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs-rootless-${{ matrix.platform }}
+          path: /tmp/nodestro-e2e.log
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Leftovers
         if: always()
         run: DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock" docker ps -a --filter label=dev.nodestro.sandbox --format '{{.ID}} {{.Names}} {{.Status}}' || true
