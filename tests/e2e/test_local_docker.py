@@ -18,6 +18,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any
 import urllib.error
@@ -54,6 +55,10 @@ from tool import shout
 def test_shout():
     assert shout("hi") == "HI!"
 """
+
+#: A second tool for the restart test (LD-020), so the tool tests below still save ``shout`` for the first time.
+RESTART_TOOL = TOOL.replace("def shout(", "def shout_after_restart(")
+RESTART_TOOL_TESTS = TOOL_TESTS.replace("shout", "shout_after_restart")
 
 
 def _free_port() -> int:
@@ -230,17 +235,31 @@ def launcher(*args: str, check: bool = True, timeout: float = 900) -> subprocess
     return result
 
 
+def wait_healthy(service: str, *, timeout: float = 240) -> None:
+    wait_for(
+        lambda: container(service)["State"].get("Health", {}).get("Status") == "healthy",
+        timeout=timeout,
+        what=f"{service} to be healthy",
+    )
+
+
 def container(service: str) -> dict[str, Any]:
     name = compose("ps", "-q", service).stdout.decode().strip()
     assert name, f"{service} is not running"
     return dict(json.loads(docker("inspect", name).stdout)[0])
 
 
+#: When the installation was started (Unix time): Docker's events since then are this run's.
+STARTED = time.time()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def installation() -> Iterator[None]:
+    global STARTED
     if docker("image", "inspect", IMAGE, check=False).returncode != 0:
         pytest.fail(f"the image {IMAGE} is missing: build it with scripts/build-image.sh")
     compose("down", "-v", "--remove-orphans", check=False)
+    STARTED = time.time() - 1
     started = launcher("start")
     assert LINK.search(started.stdout), started.stdout
     compose("up", "-d", "--wait", "model-stub")
@@ -251,6 +270,139 @@ def installation() -> Iterator[None]:
         Path(tempfile.gettempdir(), "nodestro-e2e.log").write_text(logs)
         compose("down", "-v", "--remove-orphans", check=False)
         docker("volume", "rm", f"{PROJECT}_data-before-update", check=False)
+
+
+# ---- the first sandbox check ----------------------------------------------------------------------------------------
+# First in this file: on a fresh daemon the studio is still building the sandbox's runtime image now.
+
+#: A step of the runtime image's build: the classic builder runs each RUN step of nodestro-runtime's Dockerfile
+#: (``pip download`` / ``pip install`` with ``--require-hashes``) in a container of its own.
+BUILD_STEP = re.compile(r"python -m pip (download|install) .*--require-hashes")
+
+
+class BuildSteps:
+    """Watches Docker's container events and notes when a RUN step of the runtime image's build starts.
+
+    A rebuild can be short: with the classic builder on Docker's graph-driver store (Docker 28, the CI runners'
+    rootless daemon), removing the image leaves the download stage's layers as build cache, so a rebuild reruns only
+    the offline ``pip install`` step, a few seconds. Polling ``docker ps`` while waiting for the restarted studio
+    missed that step in CI; the event stream misses no container, and each one is inspected while it exists."""
+
+    def __init__(self) -> None:
+        self.seen = threading.Event()
+        self._events = subprocess.Popen(
+            ["docker", "events", "--filter", "type=container", "--filter", "event=create", "--format", "{{.Actor.ID}}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        self._reader = threading.Thread(target=self._read, daemon=True)
+        self._reader.start()
+
+    def _read(self) -> None:
+        assert self._events.stdout is not None
+        for line in self._events.stdout:
+            found = docker("inspect", "--format", "{{json .Config.Cmd}}", line.strip(), check=False).stdout
+            if BUILD_STEP.search(" ".join(json.loads(found or "null") or [])):
+                self.seen.set()
+
+    def close(self) -> None:
+        self._events.kill()
+        self._events.wait(timeout=30)
+
+
+def _sandbox_starts(since: float, attribute: str) -> list[str]:
+    """An attribute (``name``, ``image``) of each of this installation's sandbox containers started since then."""
+    events = ["events", "--since", f"{since:.0f}", "--until", f"{time.time() + 1:.0f}", "--filter", "type=container"]
+    events += ["--filter", "event=start", "--filter", f"label=dev.nodestro.sandbox={PROJECT}"]
+    return docker(*events, "--format", f"{{{{.Actor.Attributes.{attribute}}}}}").stdout.split()
+
+
+def _sandbox_containers(since: float) -> list[str]:
+    return _sandbox_starts(since, "name")
+
+
+def _sandbox_images(since: float) -> set[str]:
+    """The images of this installation's sandbox containers started since then (the self-test's included)."""
+    return set(_sandbox_starts(since, "image"))
+
+
+def _remove_sandbox_images(images: set[str]) -> None:
+    """Remove the runtime image(s) the studio's self-test used, by all their tags, so the next check builds anew.
+
+    ``nodestro-env`` images are a cache the runtime rebuilds on demand (and evicts itself). The build cache of the
+    download stage may stay (see :class:`BuildSteps`); the install step runs again either way."""
+    assert images, "the approved sandbox started no container of this installation (self-test)"
+    for image in images:
+        tags = json.loads(docker("image", "inspect", "--format", "{{json .RepoTags}}", image).stdout or "[]") or []
+        assert all(tag.startswith("nodestro-env:") for tag in tags), tags
+        docker("rmi", *(tags or [image]))
+        assert docker("image", "inspect", image, check=False).returncode != 0, f"{image} is still on the daemon"
+
+
+def _sandbox_state(client: Client) -> dict[str, Any] | None:
+    """The sandbox status, or ``None`` while the studio does not answer (it is restarting)."""
+    try:
+        status, body, _ = client.get("/api/sandbox/status", timeout=10)
+    except (OSError, urllib.error.URLError):
+        return None
+    if status in (401, 502, 503):  # a session of the studio before its restart, or not up yet
+        return None
+    assert status == 200, body
+    assert body["state"] in ("checking", "approved"), f"the Docker sandbox was refused: {body}"
+    return dict(body)
+
+
+def test_tool_code_runs_after_a_studio_restart_during_the_first_sandbox_image_build() -> None:
+    # LD-020: the studio is restarted (crash, OOM, `docker restart`) while its first sandbox check builds the runtime
+    # image through the gateway. The restarted studio checks again; while the gateway still holds its single build
+    # slot for the abandoned build it refuses the new build (429), and the runtime keeps the Docker backend
+    # `checking` and tries again after 5 to 60 s, instead of refusing tool code for five minutes (`unavailable`,
+    # `docker-image`). Whether the 429 occurs depends on how fast the daemon cancels the abandoned build; the end
+    # state is the same and is what this test requires: approved without ever being `unavailable`, then tool code
+    # runs in sandbox containers.
+    steps = BuildSteps()
+    try:
+        client = browser()
+        forced = False
+        deadline = time.monotonic() + 900
+        while not steps.seen.wait(0.1):
+            assert time.monotonic() < deadline, "the studio's sandbox check never built the runtime image"
+            body = _sandbox_state(client)
+            if body is None:
+                if container("nodestro")["State"].get("Health", {}).get("Status") == "healthy":
+                    client = browser()
+                continue
+            if body["state"] == "approved":
+                # The image existed already (a second run on this daemon) or was built before this test began:
+                # remove it and restart the studio, so its first check after the start builds it again.
+                assert not forced, f"the restarted studio was approved without building the removed image: {body}"
+                forced = True
+                _remove_sandbox_images(_sandbox_images(STARTED))
+                docker("restart", container("nodestro")["Id"])
+                continue
+        restarted = time.time() - 1
+        docker("restart", container("nodestro")["Id"])  # while the build step runs
+    finally:
+        steps.close()
+    wait_healthy("nodestro")
+    client = browser()
+    sandbox_approved(client)  # fails at once on `unavailable` (the five-minute block this test guards against)
+    sandbox_image()
+    status, saved, _ = client.post(
+        "/api/tools",
+        {"function_name": "shout_after_restart", "code": RESTART_TOOL, "tests": RESTART_TOOL_TESTS},
+        timeout=900,
+    )
+    assert status in (200, 201), saved
+    assert saved["tool"] is not None, saved  # its tests passed, in a sandbox container
+    status, answer, _ = client.post("/api/tools/shout_after_restart/run", {"input": {"text": "rebuilt"}}, timeout=600)
+    assert status == 200, answer
+    assert answer == {"output": "REBUILT!", "is_error": False}, answer
+    # The restarted studio's self-test (``orkexa-selftest-*``) and the tool's containers.
+    started = _sandbox_containers(restarted)
+    assert all(name.startswith(("orkexa-selftest-", "orkexa-sandbox-", "nodestro-sandbox-")) for name in started)
+    assert any(name.startswith(("orkexa-sandbox-", "nodestro-sandbox-")) for name in started), started
 
 
 # ---- installation and network --------------------------------------------------------------------------------------
@@ -464,11 +616,7 @@ def test_the_model_server_stays_reachable_when_the_studio_restarts() -> None:
     # after five minutes), and the tool tests below would find no sandbox (CI image linux-amd64, 2026-11-06).
     sandbox_approved(browser())
     docker("restart", container("nodestro")["Id"])
-    wait_for(
-        lambda: container("nodestro")["State"].get("Health", {}).get("Status") == "healthy",
-        timeout=240,
-        what="the studio after docker restart",
-    )
+    wait_healthy("nodestro")
     fetch = (
         "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:11434/api/version', timeout=10).status)"
     )
@@ -494,12 +642,6 @@ def test_network_access_for_published_apis_cannot_be_switched_on() -> None:
 
 
 # ---- tool code ------------------------------------------------------------------------------------------------------
-
-
-def _sandbox_containers(since: float) -> list[str]:
-    events = ["events", "--since", f"{since:.0f}", "--until", f"{time.time() + 1:.0f}", "--filter", "type=container"]
-    events += ["--filter", "event=start", "--filter", f"label=dev.nodestro.sandbox={PROJECT}"]
-    return docker(*events, "--format", "{{.Actor.Attributes.name}}").stdout.split()
 
 
 def test_tool_code_runs_only_in_locked_down_sandbox_containers() -> None:

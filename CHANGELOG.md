@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- End-to-end tests (LD-020): the new first test restarts the studio while its first sandbox check builds the
+  runtime image (a RUN step of the build runs on the daemon) and requires the sandbox to become approved without
+  ever being `unavailable`, and a new tool's tests and run to pass in sandbox containers. When the image exists
+  already (the PowerShell rerun in CI, a developer's daemon), it removes the image the self-test used and restarts
+  once to get a fresh build. It runs in the image and rootless CI jobs with the rest of `tests/e2e`.
 - Pins nodestro-studio f69020a (studio #143, TODO abatement round 4: runtime f26dac4 with the sandbox image build
   retry of LD-020, api 77f53be) and nodestro-server 30e57bb (server #65: the same studio pin, worker health check).
   LD-020 now only tracks the missing end-to-end test that restarts the studio during the first image build.

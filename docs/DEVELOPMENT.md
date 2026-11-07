@@ -52,6 +52,7 @@ and remove it at the end, volumes included. They take about two to three minutes
 
 | Test | Checks |
 | --- | --- |
+| `test_tool_code_runs_after_a_studio_restart_during_the_first_sandbox_image_build` | runs first, while the studio's first sandbox check builds the runtime image: restarts the studio during that build (when the image exists already, it removes it and restarts once to get a fresh build), then the sandbox must turn `approved` without ever being `unavailable`, and a new tool's tests and a direct run must pass in sandbox containers (LD-020) |
 | `test_the_port_is_published_on_the_host_loopback_only` | the only published port is on 127.0.0.1 |
 | `test_the_containers_are_locked_down` | read-only, no capabilities, no-new-privileges, not privileged, studio user 10001, only the gateway has the host socket, gateway without network |
 | `test_the_aws_sdk_is_in_the_image_but_no_aws_credentials_are` | boto3 and the Bedrock provider are in the image, but without a `compose.override.yaml` the container has no `AWS_*` credential variables and no `~/.aws` |
