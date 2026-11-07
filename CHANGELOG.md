@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pins nodestro-studio ee3f378 (studio #142, TODO abatement round 3: Settings → Members, export delete; runtime
+  b06b371, api 7142761) and nodestro-server 8b2af08 (server #62: the same studio pin, RUNBOOK).
 - Pins nodestro-studio 5c0fbd8 (studio #140, TODO abatement round 2: api 56fa762, sdk 1306cbe) and nodestro-server
   9d918aa (server #61: the same studio pin).
 - Pins nodestro-studio 39fb164 (studio #136, TODO abatement round) and nodestro-server ddd095f (server #59: image
