@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pins nodestro-studio f69020a (studio #143, TODO abatement round 4: runtime f26dac4 with the sandbox image build
+  retry of LD-020, api 77f53be) and nodestro-server 30e57bb (server #65: the same studio pin, worker health check).
+  LD-020 now only tracks the missing end-to-end test that restarts the studio during the first image build.
 - End-to-end tests: the sandbox tests wait until the studio's Docker sandbox is approved (`GET /api/sandbox/status`)
   instead of racing its first check, and the studio is no longer restarted while that check builds the sandbox
   image (a CI run had failed with `sandbox.isolation_required`, `docker-image`; LD-020 tracks the product side). CI
