@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 27f8bd4 (studio #146 and #147, TODO abatement round 5: api 63af1df, sdk 4596be3, runtime
+  de56875) and nodestro-server 5b0bdab (server #66: the same studio pin, RUNBOOK for pgvector installed later).
 - End-to-end tests (LD-020): the new first test restarts the studio while its first sandbox check builds the
   runtime image (a RUN step of the build runs on the daemon) and requires the sandbox to become approved without
   ever being `unavailable`, and a new tool's tests and run to pass in sandbox containers. When the image exists
