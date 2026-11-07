@@ -61,20 +61,17 @@ None known for a planned release (see the summary).
 
 ## Bugs and reliability
 
-### LD-020 · A studio restart during the first sandbox image build blocks tool code for five minutes
+### LD-020 · No end-to-end test restarts the studio during the first sandbox image build
 
 - **Priority:** P3 Low · **Status:** Open · **Refs:** CI run 42302847118 (attempt 1, image linux-amd64, 2026-11-06),
-  nodestro-runtime `docker_status.py` (`RETRY_FAILED`), `sandbox_gateway.py` (`max_builds`)
-- **What:** After a start the studio checks the Docker sandbox in the background, and the first check builds the
-  sandbox's runtime image (`nodestro-env:<key>`) through the gateway, which runs one build at a time and refuses a
-  second one (HTTP 429). When the studio restarts during that build (a crash, `docker restart`, an update), the
-  restarted studio's check most likely meets the abandoned build and is refused; the runtime counts that as
-  `docker-image` and checks again only after five minutes. Until then tool code is refused with
-  `sandbox.isolation_required` (Settings, Sandbox, "Check again" helps once the old build ended). The end-to-end
-  tests no longer restart the studio during the build (they wait for the approved sandbox first).
-- **Next step:** In nodestro-runtime, treat a refused concurrent build as `checking` and retry it soon (or let the
-  gateway queue builds); then a test that restarts the studio during the first build.
-- **Depends on:** nodestro-runtime
+  nodestro-runtime `docker_status.py`, runtime #126 (`ae7f682`, `5701719`)
+- **What:** The product side is fixed since the pin of nodestro-studio f69020a (runtime f26dac4): when the sandbox
+  gateway refuses the runtime image's build because another build runs (HTTP 429, e.g. the first `nodestro-env` build
+  of a studio that was restarted meanwhile), the Docker backend stays `checking` and retries after 5 to 60 seconds
+  instead of refusing tool code with `sandbox.isolation_required` for five minutes. The runtime tests this with a
+  fake gateway; the end-to-end tests here wait for the approved sandbox and never restart the studio mid-build.
+- **Next step:** An end-to-end test that restarts the studio container during the first image build and expects tool
+  code to run once the build ends.
 
 ## Architecture and modularity
 
@@ -201,7 +198,6 @@ None known.
 | LD-010 | nodestro-api | Launch and session handling (`launch.py`, `local_access.py`) | Implementation there |
 | (pointer) | nodestro-server | `scripts/scan-vulnerabilities.sh`, `scripts/pin_distance.py` | `scripts/scan-image.sh` and `scripts/pin-distance.sh` run them at the pinned server commit (they skip until the pin includes them) |
 | – | nodestro-studio | ST-027 (no `nodestro-local-docker` entry in `platform/versions.json` `products`) | Owned there |
-| LD-020 | nodestro-runtime | `docker_status.py`, `sandbox_gateway.py` (image build retry) | Fix there |
 | LD-018 | nodestro-runtime, nodestro-studio | Local models (`docs/local-models.md`), studio pin | Needs the pin |
 
 ## CI access to private repositories
