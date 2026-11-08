@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 9d24565 (studio #162, pin wave W7, TABRION JQ-4: runtime f5da80d, runtime #143, where writes
+  are never repeated after a lost connection; axentra 9c4666f with the B-06-1 log redaction (server profile only);
+  api 221f9e1) and nodestro-server 421229c (server #75: the same studio pin). The local profile installs no
+  PostgreSQL backend; behavior unchanged.
+
 - Pins nodestro-studio c41e3c2 (studio #157, MUP-ONA B6 cascade: runtime 81b0f55, where the knowledge base, file store
   and memory run on orkexa's PostgreSQL backends (orkexa 792a041); api 05e0232) and nodestro-server 89fa4af (server
   #74: the same studio pin, RUNBOOK for `storage.schema_mismatch`). The local profile installs no PostgreSQL backend;
