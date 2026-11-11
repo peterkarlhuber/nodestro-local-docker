@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 6755c7a (studio #167, RT-067: orkexa 840add4 replays only the latest reasoning to Ollama so tool
+  conversations no longer outgrow the context window and answers instead of failing at a tool-round or reasoning limit;
+  runtime 979c11c with `limits_handled` on a step; api e584d6f). nodestro-server stays at 421229c (its image definition
+  is unchanged). Limits are unchanged.
+
 - Pins nodestro-studio 9d24565 (studio #162, pin wave W7, TABRION JQ-4: runtime f5da80d, runtime #143, where writes
   are never repeated after a lost connection; axentra 9c4666f with the B-06-1 log redaction (server profile only);
   api 221f9e1) and nodestro-server 421229c (server #75: the same studio pin). The local profile installs no
