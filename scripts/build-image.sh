@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the Nodestro Local Docker image from components.json: the shared image definition of nodestro-server (target
-# `local`) at its pinned commit, with the nodestro-studio commit that pins every component by full SHA.
+# `local`) at its pinned commit, with the nodestro-studio commit whose lock pins every internal package by full SHA.
 #
 #   scripts/build-image.sh [TAG]            (default: nodestro-local:<studio>-<server>, also tagged nodestro-local:dev)
 #
