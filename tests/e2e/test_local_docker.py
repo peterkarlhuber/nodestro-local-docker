@@ -286,10 +286,18 @@ class BuildSteps:
     A rebuild can be short: with the classic builder on Docker's graph-driver store (Docker 28, the CI runners'
     rootless daemon), removing the image leaves the download stage's layers as build cache, so a rebuild reruns only
     the offline ``pip install`` step, a few seconds. Polling ``docker ps`` while waiting for the restarted studio
-    missed that step in CI; the event stream misses no container, and each one is inspected while it exists."""
+    missed that step in CI; the event stream misses no container, and each one is inspected while it exists.
+
+    Not every created container lives long enough to be inspected: for each metadata step (``LABEL``, ``USER``,
+    ``WORKDIR``) the classic builder creates a ``#(nop)`` container, commits it and removes it at once, without
+    starting it. ``docker inspect --format`` of a container that is gone exits non-zero and prints an empty line; such
+    a container is skipped (a RUN step's ``pip`` runs for seconds, so it is inspected while it exists). Any other
+    error stops the watcher and is kept in :attr:`error`, so the test fails with it instead of waiting for a build
+    step it can no longer see."""
 
     def __init__(self) -> None:
         self.seen = threading.Event()
+        self.error: BaseException | None = None
         self._events = subprocess.Popen(
             ["docker", "events", "--filter", "type=container", "--filter", "event=create", "--format", "{{.Actor.ID}}"],
             stdout=subprocess.PIPE,
@@ -301,10 +309,16 @@ class BuildSteps:
 
     def _read(self) -> None:
         assert self._events.stdout is not None
-        for line in self._events.stdout:
-            found = docker("inspect", "--format", "{{json .Config.Cmd}}", line.strip(), check=False).stdout
-            if BUILD_STEP.search(" ".join(json.loads(found or "null") or [])):
-                self.seen.set()
+        try:
+            for line in self._events.stdout:
+                found = docker("inspect", "--format", "{{json .Config.Cmd}}", line.strip(), check=False)
+                if found.returncode != 0 or not found.stdout.strip():
+                    continue  # removed before it could be inspected (see above)
+                if BUILD_STEP.search(" ".join(json.loads(found.stdout) or [])):
+                    self.seen.set()
+        except BaseException as exc:
+            self.error = exc
+            raise
 
     def close(self) -> None:
         self._events.kill()
@@ -367,6 +381,7 @@ def test_tool_code_runs_after_a_studio_restart_during_the_first_sandbox_image_bu
         forced = False
         deadline = time.monotonic() + 900
         while not steps.seen.wait(0.1):
+            assert steps.error is None, f"the watcher of Docker's container events failed: {steps.error!r}"
             assert time.monotonic() < deadline, "the studio's sandbox check never built the runtime image"
             body = _sandbox_state(client)
             if body is None:
