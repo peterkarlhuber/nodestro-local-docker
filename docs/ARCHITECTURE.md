@@ -123,8 +123,11 @@ tests and the documentation.
 
 [components.json](../components.json) names two full commit SHAs:
 
-- **nodestro-studio**: pins every component (runtime, api, examples, integrations, orkexa) in its `pyproject.toml`
-  and `platform/versions.json`. `scripts/check-pins.sh` checks that they agree.
+- **nodestro-studio**: pins every internal package (runtime, api, examples, integrations, orkexa, tabrion) by full
+  commit SHA in its lock (`platform/internal.txt`, generated from `platform/versions.json`); the libraries declare
+  version ranges. `scripts/check-pins.sh` runs the studio's `scripts/check_versions.py`, which checks that they
+  agree. The image build requires the lock, the studio's upload cutoff (`platform/uploaded-prior-to`) and its
+  `scripts/lock_check.py`.
 - **nodestro-server**: holds the image definition.
 
 An image is reproducible from these two commits. Its tag is `nodestro-local:<studio 12>-<server 12>`, and its labels

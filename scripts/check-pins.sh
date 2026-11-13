@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Check components.json: full SHAs, both commits on their repository's master, and the studio commit's own pins agree
-# (its scripts/check_versions.py: pyproject, platform/versions.json and every component pin), and the Ollama image is
+# (its scripts/check_versions.py: platform/versions.json, its lock and every version range), and the Ollama image is
 # the release Orkexa installs.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"

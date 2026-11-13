@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Pins nodestro-studio 479ae56 (studio #170..#179, CI-FAST: one lock of the internal packages, `platform/internal.txt`
+  and `platform/internal-server.txt`, generated from `platform/versions.json`, with version ranges in the libraries;
+  the shared upload cutoff `platform/uploaded-prior-to`; `scripts/lock_check.py`; tabrion d5821fa as its own
+  component; runtime e05f51d and api d683b9e with service connections (NAL-A1); orkexa 3165be2, examples b20395a,
+  integrations 62138e2) and nodestro-server f92fc77 (server #86: the same studio pin; the image installs only from
+  the lock, binds the third-party packages to the studio's upload cutoff and runs the lock check on both
+  environments, and a studio commit without these files fails the build).
+
 - Pins nodestro-studio 6755c7a (studio #167, RT-067: orkexa 840add4 replays only the latest reasoning to Ollama so tool
   conversations no longer outgrow the context window and answers instead of failing at a tool-round or reasoning limit;
   runtime 979c11c with `limits_handled` on a step; api e584d6f). nodestro-server stays at 421229c (its image definition
