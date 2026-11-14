@@ -163,5 +163,5 @@ cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
 
 ## License
 
-See [LICENSE](LICENSE). The image contains third-party packages under their own licenses; `scripts/manifest.sh`
+Proprietary: Copyright (c) 2026 Levuvo. All rights reserved. See [LICENSE](LICENSE). The image contains third-party packages under their own licenses; `scripts/manifest.sh`
 writes the full inventory.
