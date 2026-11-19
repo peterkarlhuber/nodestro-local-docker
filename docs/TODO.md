@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 1 |
 | P2 Medium | 3 |
-| P3 Low | 7 |
+| P3 Low | 8 |
 | P4 Optional | 2 |
 
 **Release blockers:** None for this repository, because no Local Docker release is planned; no entry here blocks
@@ -58,6 +58,19 @@ None known for a planned release (see the summary).
   downloads with a closed proxy port instead of an internal-only network.
 - **Next step:** Decide whether air-gapped installs need a network boundary again (internal-only Ollama behind an
   authenticating proxy).
+
+### LD-020 · No key store: provider keys stay in plain text in the data volume
+
+- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** nodestro-runtime RT-081 (security fix N-03, #191,
+  #192), nodestro-studio ST-066 and MUP-ONA AR-3, owner decisions E-P-5 and E-P-6 (2026-11-19)
+- **What:** Since N-03 the runtime seals provider API keys with a key store when it has one (the desktop's keychain or
+  `NODESTRO_VAULT_KEY`). Local Docker passes no `NODESTRO_VAULT_KEY`, so provider keys stay as before: plain text in
+  the database of the data volume (readable by whoever can read the volume or the host user's Docker), and MCP tokens
+  and connection secrets are kept for the session only. The image has `cryptography` (a declared runtime dependency
+  since #192), so only the key's custody is missing.
+- **Next step:** Decide where a Local Docker key would live (a launcher-generated file outside the data volume, the
+  host's keychain through the launchers, or an operator variable) and how it reaches the container without the
+  environment of other processes. The independent review of N-03 stays open (internal tests do not replace it).
 
 ## Bugs and reliability
 
