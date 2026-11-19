@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Security (LD-020): provider keys, MCP tokens and connection secrets are stored only encrypted, with a key file on the
+  host (docs/SECURITY.md "The key file").
+  - Both launchers create it once (32 random bytes) outside this folder, the data volume, the images and the backups:
+    Linux `~/.config/nodestro-local/<project>/vault.key`, macOS `~/Library/Application Support/...`, Windows
+    `%LOCALAPPDATA%\nodestro-local\<project>\vault.key`, or `NODESTRO_VAULT_KEY_FILE`. The file is 0600 in a 0700
+    folder (Windows: an ACL with the current user only); a link, another owner or access for others is refused.
+  - compose.vault-key.yaml (only for an image with the label `dev.nodestro.vault-key-file`) mounts it read-only. The
+    studio's container starts `nodestro-local boot` as root with three capabilities, which drops to 10001 and hands
+    the key over through a pipe. `exec` and the health check run as 10001.
+  - New commands `vault-key`, `rotate-vault-key`, `accept-new-vault-key --yes`; `uninstall --delete-data` removes the
+    key file too. The studio refuses a missing or non-fitting key; plain provider keys are sealed on the first start.
+  - Tests: launcher tests (tests/launcher/test_vault_key.py), end-to-end key file tests, the upgrade test checks the
+    migration and the rollback. LD-020 now tracks the independent review.
 - Pins nodestro-studio ff0df34 (security fixes N-03 and N-07, `cryptography` declared in the runtime) and
   nodestro-server 0443637 (server #94: the image's docker CLI 29.10.0, fixing Go stdlib CVE-2026-97054 of 29.9.2).
   Local Docker has no key store, so provider keys stay as before (LD-020).

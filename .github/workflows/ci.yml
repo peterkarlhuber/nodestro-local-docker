@@ -43,6 +43,7 @@ jobs:
           docker compose -f compose.yaml -f tests/compose.test.yaml config -q
           docker compose -f compose.yaml -f compose.local-models-off.yaml config -q
           docker compose -f compose.yaml -f compose.local-models-offline.yaml config -q
+          NODESTRO_VAULT_KEY_HOST_FILE=/etc/hostname docker compose -f compose.yaml -f compose.vault-key.yaml config -q
           NODESTRO_HTTPS_PROXY=http://proxy.example:3128 docker compose -f compose.yaml -f compose.proxy.yaml config -q
       - name: Compose files the launchers choose (a stand-in docker; bash and PowerShell 7)
         run: |
@@ -73,6 +74,36 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           pwsh -NoProfile -File .\nodestro.ps1 no-such-command
           if ($LASTEXITCODE -ne 1) { Write-Error "an unknown command must fail"; exit 1 }
+          exit 0
+        shell: pwsh
+      - name: Key file with the current user's ACL only (LD-020; Windows PowerShell 5.1 and PowerShell 7)
+        run: |
+          $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+          foreach ($shell in @("powershell", "pwsh")) {
+            $dir = Join-Path $env:RUNNER_TEMP "keys-$shell"
+            $env:NODESTRO_VAULT_KEY_FILE = Join-Path $dir "vault.key"
+            $printed = & $shell -NoProfile -ExecutionPolicy Bypass -File .\nodestro.ps1 vault-key
+            if ($LASTEXITCODE -ne 0) { Write-Error "$shell vault-key failed"; exit 1 }
+            if (($printed | Select-Object -Last 1).Trim() -ne $env:NODESTRO_VAULT_KEY_FILE) { Write-Error "wrong path: $printed"; exit 1 }
+            $key = (Get-Content -Raw $env:NODESTRO_VAULT_KEY_FILE).Trim()
+            if ([Convert]::FromBase64String($key).Length -ne 32) { Write-Error "not 32 bytes"; exit 1 }
+            foreach ($path in @($dir, $env:NODESTRO_VAULT_KEY_FILE)) {
+              $acl = Get-Acl -LiteralPath $path
+              if (-not $acl.AreAccessRulesProtected) { Write-Error "$path inherits permissions"; exit 1 }
+              $rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+              if ($rules.Count -ne 1 -or $rules[0].IdentityReference -ne $user -or $rules[0].AccessControlType -ne "Allow") {
+                Write-Error "$path is open to others: $($rules | Out-String)"; exit 1
+              }
+            }
+            # Never replaced; a file open to others is refused.
+            & $shell -NoProfile -ExecutionPolicy Bypass -File .\nodestro.ps1 vault-key | Out-Null
+            if ((Get-Content -Raw $env:NODESTRO_VAULT_KEY_FILE).Trim() -ne $key) { Write-Error "the key was replaced"; exit 1 }
+            $acl = Get-Acl -LiteralPath $env:NODESTRO_VAULT_KEY_FILE
+            $acl.SetAccessRuleProtection($false, $true)
+            Set-Acl -LiteralPath $env:NODESTRO_VAULT_KEY_FILE -AclObject $acl
+            & $shell -NoProfile -ExecutionPolicy Bypass -File .\nodestro.ps1 vault-key *> $null
+            if ($LASTEXITCODE -ne 1) { Write-Error "$shell accepted a key file that inherits permissions"; exit 1 }
+          }
           exit 0
         shell: pwsh
 

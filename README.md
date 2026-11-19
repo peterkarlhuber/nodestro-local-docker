@@ -58,6 +58,9 @@ never receive your session cookie ([docs/SESSIONS.md](docs/SESSIONS.md)). A brow
 | `./nodestro update` | Build the current version, back up, switch, roll back automatically on failure |
 | `./nodestro rollback` | Go back to the version and data from before the last update |
 | `./nodestro rotate-key` | Replace the access key and the host name (old links and sessions stop working) |
+| `./nodestro vault-key` | Where the key file for your secrets is (keep a copy somewhere safe, apart from the backups) |
+| `./nodestro rotate-vault-key` | Seal every stored secret with a new key file |
+| `./nodestro accept-new-vault-key --yes` | Only after losing the key file: drop the secrets it sealed and use a new key |
 | `./nodestro uninstall` | Remove the containers, keep the data (`--delete-data`: remove everything) |
 
 On Windows, `.\nodestro.ps1` has the same commands. `build` and `update` need `bash` and `git` (Git for Windows or
@@ -135,6 +138,11 @@ cgroup v2 ([setup](docs/PLATFORMS.md#rootless-docker)).
 - All data (workflows, runs, knowledge, settings, encrypted provider keys, the access key) lives in the volume
   `nodestro-local_data`, the local models in `nodestro-local_models`. `stop`, `restart`, `update` and `uninstall`
   keep both. Backups contain the data, not the models.
+- Provider keys, MCP tokens and connection secrets are stored only encrypted. The key is a file on your computer,
+  outside this folder, the data volume and the backups, readable by you only (`./nodestro vault-key` shows where;
+  see [docs/SECURITY.md](docs/SECURITY.md#the-key-file)). The launcher creates it on the first start. **Keep a copy of
+  it somewhere safe, apart from the backups**: without it, the stored keys and tokens cannot be read again and have to
+  be entered again. `update` and `rollback` keep it.
 - `./nodestro backup` writes the studio's own complete backup. `restore` reads it back, also on another computer.
 - `./nodestro update` backs up to `backups/`, snapshots the volume, starts the new version and returns to the old
   one by itself if it does not start. `./nodestro rollback` returns later. Updates are reproducible: the version is

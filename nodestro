@@ -2,7 +2,8 @@
 # Nodestro Local Docker launcher (Linux and macOS; Windows: nodestro.ps1).
 #
 #   ./nodestro start | stop | restart | status | open | link | logout | logs | backup [FILE] | restore FILE
-#              update | rollback | build | rotate-key | uninstall [--delete-data] | help
+#              update | rollback | build | rotate-key | vault-key | rotate-vault-key
+#              accept-new-vault-key --yes | uninstall [--delete-data] | help
 #
 # Needs only Docker (Docker Engine with the compose plugin, or Docker Desktop) and, for `build`, git.
 set -euo pipefail
@@ -33,6 +34,10 @@ Usage: ./nodestro COMMAND
   rollback                    Return to the image and the data from before the last update
   build                       Build the image from the pinned sources (needs git)
   rotate-key                  Replace the access key and open the studio with the new one
+  vault-key                   Show where the key file for your secrets is (created if missing); keep a copy of it
+                              somewhere safe, apart from the backups
+  rotate-vault-key            Seal every stored secret with a new key file (also the copy kept for a rollback)
+  accept-new-vault-key --yes  After losing the key file: remove the secrets it sealed (enter them again) and use a new key
   uninstall [--delete-data]   Remove Nodestro; the data volume is kept unless --delete-data
   help                        This text
 
@@ -48,6 +53,9 @@ Settings (environment variables):
   NODESTRO_LOCAL_MODELS       on (default): local model server; offline: without internet (offline imports only);
                               off: none. Remembered until you set it again
   NODESTRO_IMPORT_DIR         Folder for offline model imports, /import in the studio (default: import next to this)
+  NODESTRO_VAULT_KEY_FILE     The key file for provider keys, MCP tokens and connection secrets (default: Linux
+                              ~/.config/nodestro-local/<project>/vault.key, macOS ~/Library/Application Support/
+                              nodestro-local/<project>/vault.key); never inside this folder
 USAGE
 }
 fail() { printf 'Nodestro: %s\n' "$*" >&2; exit 1; }
@@ -79,8 +87,88 @@ save_state() {
   } > "$state"
 }
 
+# ---- the key file (LD-020, docs/SECURITY.md "The key file") ----------------------------------------------------------
+# Provider keys, MCP tokens and connection secrets are sealed with a key kept in a file on the host: outside this folder,
+# the data volume, the images and the backups; 0600 in a 0700 folder of the current user. Created once with the
+# system's cryptographic random generator, and never replaced by the launcher: without it the studio does not start.
+
+vault_key_file() {
+  if [ -n "${NODESTRO_VAULT_KEY_FILE:-}" ]; then
+    case "$NODESTRO_VAULT_KEY_FILE" in
+      /*) printf '%s' "$NODESTRO_VAULT_KEY_FILE" ;;
+      *) printf '%s/%s' "$PWD" "$NODESTRO_VAULT_KEY_FILE" ;;
+    esac
+    return
+  fi
+  case "$(uname -s)" in
+    Darwin) printf '%s' "$HOME/Library/Application Support/nodestro-local/$NODESTRO_PROJECT/vault.key" ;;
+    *) printf '%s' "${XDG_CONFIG_HOME:-$HOME/.config}/nodestro-local/$NODESTRO_PROJECT/vault.key" ;;
+  esac
+}
+
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+file_owner() { stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1"; }
+
+# FILE: refuse a key file (or its folder) that is a link, belongs to someone else or is open to others.
+check_vault_key() {
+  local file="$1" dir mode
+  dir="$(dirname "$file")"
+  [ ! -L "$file" ] && [ -f "$file" ] || fail "The key file $file is not a regular file."
+  [ ! -L "$dir" ] || fail "The folder of the key file ($dir) is a symbolic link."
+  [ "$(file_owner "$file")" = "$(id -u)" ] && [ "$(file_owner "$dir")" = "$(id -u)" ] \
+    || fail "The key file $file or its folder belongs to another user."
+  mode="$(file_mode "$file")"
+  [ $((8#$mode & 8#077)) -eq 0 ] || fail "The key file $file can be read by others (mode $mode); fix it: chmod 600 \"$file\""
+  mode="$(file_mode "$dir")"
+  [ $((8#$mode & 8#077)) -eq 0 ] || fail "The folder $dir is open to others (mode $mode); fix it: chmod 700 \"$dir\""
+}
+
+# FILE: create a new key file there unless one exists (atomically; an existing file is never replaced).
+new_vault_key() {
+  local file="$1" dir tmp
+  dir="$(dirname "$file")"
+  case "$file/" in "$here"/*) fail "The key file must not be inside $here (it would end up in copies of this folder)." ;; esac
+  if [ -e "$file" ] || [ -L "$file" ]; then return 0; fi
+  (umask 077 && mkdir -p "$dir") || fail "Creating the folder $dir for the key file failed."
+  tmp="$(umask 077 && mktemp "$dir/.vault-key-XXXXXX")" || fail "Creating the key file $file failed."
+  # 32 bytes from the kernel's cryptographic random generator, base64.
+  if ! head -c 32 /dev/urandom | base64 | tr -d '\n' > "$tmp" || [ "$(wc -c < "$tmp" | tr -d ' ')" -ne 44 ]; then
+    rm -f "$tmp"; fail "Creating the key file $file failed."
+  fi
+  printf '\n' >> "$tmp"
+  # ln refuses to replace an existing file: two launchers at once never write two keys.
+  ln "$tmp" "$file" 2>/dev/null || { rm -f "$tmp"; return 0; }
+  rm -f "$tmp"
+  return 1
+}
+
+ensure_vault_key() {
+  local file
+  file="$(vault_key_file)"
+  if ! new_vault_key "$file"; then
+    say "Created the key file for your secrets: $file" >&2
+    say "  Keep a copy of it somewhere safe (not with the backups): without it, stored provider keys, MCP tokens and" >&2
+    say "  connection secrets cannot be read again." >&2
+    if command -v docker >/dev/null 2>&1 && docker volume inspect "$(volume data)" >/dev/null 2>&1; then
+      say "  The data volume $(volume data) exists already. If its secrets were sealed with an earlier key file, Nodestro" >&2
+      say "  will refuse to start: put the earlier file back at this path, or give them up: ./nodestro accept-new-vault-key --yes" >&2
+    fi
+  fi
+  check_vault_key "$file"
+  export NODESTRO_VAULT_KEY_HOST_FILE="$file"
+}
+
+# Whether IMAGE reads the key file (images before LD-020, after a rollback, do not).
+image_has_vault_key() {
+  [ "$(docker image inspect --format '{{ index .Config.Labels "dev.nodestro.vault-key-file" }}' "$1" 2>/dev/null)" = 1 ]
+}
+
 compose() {
   local files=(-f "$here/compose.yaml")
+  if image_has_vault_key "$NODESTRO_IMAGE"; then
+    ensure_vault_key
+    files+=(-f "$here/compose.vault-key.yaml")
+  fi
   if [ -n "${NODESTRO_EXTRA_CA_FILE:-}" ]; then files+=(-f "$here/compose.extra-ca.yaml"); fi
   # Before the offline file, which closes Ollama's downloads again.
   if [ -n "${NODESTRO_HTTPS_PROXY:-}" ]; then files+=(-f "$here/compose.proxy.yaml"); fi
@@ -132,7 +220,7 @@ build() {
 }
 
 link() {
-  compose exec -T nodestro nodestro-local link --port "$NODESTRO_PORT" | tr -d '\r'
+  compose exec -T --user 10001:10001 nodestro nodestro-local link --port "$NODESTRO_PORT" | tr -d '\r'
 }
 
 open_browser() {
@@ -193,7 +281,7 @@ update() {
     mkdir -p "$here/backups"
     local file
     file="$here/backups/before-update-$(date +%Y%m%d-%H%M%S).zip"
-    compose exec -T nodestro nodestro-local backup > "$file" && say "Backup written to $file"
+    compose exec -T --user 10001:10001 nodestro nodestro-local backup > "$file" && say "Backup written to $file"
   fi
   if [ -n "${NODESTRO_UPDATE_IMAGE:-}" ]; then  # an image built or loaded elsewhere
     docker image inspect "$NODESTRO_UPDATE_IMAGE" >/dev/null 2>&1 || fail "The image $NODESTRO_UPDATE_IMAGE is missing."
@@ -217,6 +305,72 @@ update() {
   fi
   say "Updated to $next (rollback: ./nodestro rollback)."
   open_browser
+}
+
+# VOLUME OLD NEW: seal the secrets of the data in VOLUME with the key file NEW instead of OLD (studio stopped).
+rekey_volume() {
+  boot_run "$1" rekey --mount "type=bind,source=$2,target=/run/secrets/nodestro-vault-key,readonly" \
+    --mount "type=bind,source=$3,target=/run/secrets/nodestro-vault-key-new,readonly"
+}
+
+# VOLUME ACTION [docker run options]: `nodestro-local boot ACTION` on the data in VOLUME, as the studio's container
+# runs it (root with three capabilities until it drops to the studio's user), without network.
+boot_run() {
+  local data="$1" action="$2"
+  shift 2
+  docker run --rm --network none --read-only --tmpfs /tmp --user 0:0 --cap-drop ALL \
+    --cap-add DAC_READ_SEARCH --cap-add SETUID --cap-add SETGID --security-opt no-new-privileges:true \
+    --entrypoint nodestro-local -v "$data:/var/lib/nodestro" "$@" "$NODESTRO_IMAGE" boot "$action"
+}
+
+rotate_vault_key() {
+  require_docker
+  load_state
+  image_has_vault_key "$NODESTRO_IMAGE" || fail "The image $NODESTRO_IMAGE has no key file support; update first (./nodestro update)."
+  ensure_vault_key
+  local file new data snapshot
+  file="$NODESTRO_VAULT_KEY_HOST_FILE"
+  new="$file.new"
+  data="$(volume data)"
+  snapshot="$(volume data-before-update)"
+  # A new key from an interrupted rotation is used again: the data may be sealed with it already.
+  if new_vault_key "$new"; then say "Continuing the rotation with $new."; fi
+  check_vault_key "$new"
+  say "Stopping Nodestro to seal its secrets with the new key..."
+  compose stop nodestro >/dev/null
+  if docker volume inspect "$data" >/dev/null 2>&1 && ! rekey_volume "$data" "$file" "$new"; then
+    compose up -d --wait --wait-timeout 300 >/dev/null || true
+    fail "The rotation stopped; nothing was changed and the key file stays $file."
+  fi
+  if docker volume inspect "$snapshot" >/dev/null 2>&1 && ! rekey_volume "$snapshot" "$file" "$new"; then
+    rekey_volume "$data" "$new" "$file" || fail "The rotation failed half-way: keep both $file and $new and run ./nodestro rotate-vault-key again."
+    compose up -d --wait --wait-timeout 300 >/dev/null || true
+    fail "The copy kept for a rollback could not be sealed with the new key; nothing was changed."
+  fi
+  mv -f "$new" "$file"
+  compose up -d --wait --wait-timeout 300 || fail "Nodestro did not start with the new key; see: ./nodestro logs"
+  say "Every stored secret is sealed with the new key in $file; the old key is gone."
+  say "Backups written before keep their MCP tokens and connection secrets sealed with the old key: after a restore"
+  say "they count as missing and have to be entered again. Replace your safe copy of the key file with the new one."
+}
+
+accept_new_vault_key() {
+  [ "${1:-}" = "--yes" ] || fail "This removes every stored provider key, MCP token and connection secret that the current key file cannot open (they have to be entered again). Only for a lost key file; if you still have it, put it back at $(vault_key_file) instead. Confirm with: ./nodestro accept-new-vault-key --yes"
+  require_docker
+  load_state
+  image_has_vault_key "$NODESTRO_IMAGE" || fail "The image $NODESTRO_IMAGE has no key file support; update first (./nodestro update)."
+  ensure_vault_key
+  local volume_name
+  compose stop nodestro >/dev/null
+  for volume_name in "$(volume data)" "$(volume data-before-update)"; do
+    if docker volume inspect "$volume_name" >/dev/null 2>&1; then
+      boot_run "$volume_name" discard-unreadable \
+        --mount "type=bind,source=$NODESTRO_VAULT_KEY_HOST_FILE,target=/run/secrets/nodestro-vault-key,readonly" \
+        || fail "Removing the unreadable secrets in $volume_name failed."
+    fi
+  done
+  compose up -d --wait --wait-timeout 300 || fail "Nodestro did not start; see: ./nodestro logs"
+  say "Nodestro uses the key file $NODESTRO_VAULT_KEY_HOST_FILE now; enter the removed keys and tokens again."
 }
 
 rollback() {
@@ -244,38 +398,49 @@ case "$command" in
   status)
     require_docker; load_state
     compose ps
-    compose exec -T nodestro nodestro-local status 2>/dev/null || say "Nodestro is not running."
+    say "Key file for your secrets: $(vault_key_file)"
+    compose exec -T --user 10001:10001 nodestro nodestro-local status 2>/dev/null || say "Nodestro is not running."
     ;;
   open) require_docker; load_state; open_browser ;;
   link) require_docker; load_state; link ;;
-  logout) require_docker; load_state; compose exec -T nodestro nodestro-local logout ;;
+  logout) require_docker; load_state; compose exec -T --user 10001:10001 nodestro nodestro-local logout ;;
   logs) require_docker; load_state; compose logs --tail "${1:-200}" ;;
   backup)
     require_docker; load_state
     file="${1:-$here/backups/nodestro-backup-$(date +%Y%m%d-%H%M%S).zip}"
     mkdir -p "$(dirname "$file")"
-    compose exec -T nodestro nodestro-local backup > "$file" || { rm -f "$file"; fail "The backup failed (is Nodestro running?)"; }
+    compose exec -T --user 10001:10001 nodestro nodestro-local backup > "$file" || { rm -f "$file"; fail "The backup failed (is Nodestro running?)"; }
     say "Backup written to $file"
     ;;
   restore)
     require_docker; load_state
     [ -f "${1:-}" ] || fail "Name the backup file: ./nodestro restore FILE"
-    compose exec -T nodestro nodestro-local restore < "$1"
+    compose exec -T --user 10001:10001 nodestro nodestro-local restore < "$1"
     say "Restored $1 (the state before it was saved as a safety backup inside Nodestro)."
     ;;
   update) update ;;
   rollback) rollback ;;
   build) require_docker; load_state; build ;;
+  vault-key)
+    ensure_vault_key
+    say "$NODESTRO_VAULT_KEY_HOST_FILE"
+    ;;
+  rotate-vault-key) rotate_vault_key ;;
+  accept-new-vault-key) accept_new_vault_key "${1:-}" ;;
   rotate-key)
     require_docker; load_state
-    compose exec -T nodestro nodestro-local rotate-key
+    compose exec -T --user 10001:10001 nodestro nodestro-local rotate-key
     compose restart nodestro; compose up -d --wait --wait-timeout 300; open_browser
     ;;
   uninstall)
     require_docker; load_state
     if [ "${1:-}" = "--delete-data" ]; then
       compose down -v; docker volume rm "$(volume data-before-update)" >/dev/null 2>&1 || true
-      say "Nodestro and all its data were removed."
+      # The key file is of no use without the data; the launcher created it, so it removes it.
+      key_file="$(vault_key_file)"
+      rm -f "$key_file" "$key_file.new"
+      rmdir "$(dirname "$key_file")" 2>/dev/null || true
+      say "Nodestro and all its data were removed, and the key file $key_file."
     else
       compose down; say "Nodestro was removed; its data volume $(volume data) is kept."
     fi

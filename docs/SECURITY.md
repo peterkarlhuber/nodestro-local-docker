@@ -126,7 +126,9 @@ socket, which root owns.
 ### Nodestro container configuration
 
 `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`, user 10001, tmpfs `/tmp` (1 GB), no host paths except
-the named volumes `data` and `sandbox-socket`, and a health check. It has network access, because model providers
+the named volumes `data` and `sandbox-socket` and the read-only key file (below), and a health check. With the key
+file (compose.vault-key.yaml) the container starts as root with `DAC_READ_SEARCH`, `SETUID` and `SETGID` only, and
+`nodestro-local boot` drops to user 10001 without capabilities before the studio starts (see "The key file"). It has network access, because model providers
 and the tool environment builds need it. Limits: 4 GB memory (`NODESTRO_MEMORY`), 512 processes (`NODESTRO_PIDS`),
 all CPUs unless `NODESTRO_CPUS` sets a number.
 
@@ -179,9 +181,10 @@ These are known and accepted for a preview. They should be reviewed again before
    port and so receive the cookie; such a program usually runs as the same user and could read the browser's cookie
    store anyway. With `NODESTRO_BROWSER_HOST=127.0.0.1` or `localhost` (for a browser that cannot open `*.localhost`
    names), this protection is gone, and the launcher warns. Safari was not tested.
-4. **Anyone who can use Docker on the host can read everything.** This includes the access key, the encrypted
-   provider keys and their encryption key, which are all in the data volume. This is inherent to Docker. Docker
-   access is root-equivalent on rootful Linux.
+4. **Anyone who can use Docker on the host can read everything.** This includes the access key in the data volume
+   and the secrets: whoever can start a container can mount the key file too (it is a host path, and the studio's
+   container reads it). This is inherent to Docker. Docker access is root-equivalent on rootful Linux. The key file
+   protects against copies of the data volume, its backups and the images, not against the host user or Docker.
 5. **Tool environment builds have network access** (the gateway's `NODESTRO_SANDBOX_BUILD_NETWORK`, default: Docker's
    default bridge network) to download pinned wheels. Only hash-pinned wheels are installed, and no package code runs at build
    time.
@@ -191,14 +194,38 @@ These are known and accepted for a preview. They should be reviewed again before
 7. **Unsigned, unpublished images.** Images are built locally from pinned commits and are labeled
    `dev.nodestro.signing=unsigned`.
 
+## The key file
+
+Provider API keys, MCP tokens (and pending MCP sign-ins) and the secrets of service connections are stored only
+encrypted (AES-GCM, nodestro-runtime `SecretBox`, owner decision LD-020 of 2026-11-19). The key is a file on the host:
+
+| | |
+| --- | --- |
+| Where | Linux: `~/.config/nodestro-local/<project>/vault.key` (`$XDG_CONFIG_HOME`); macOS: `~/Library/Application Support/nodestro-local/<project>/vault.key`; Windows: `%LOCALAPPDATA%\nodestro-local\<project>\vault.key`; or `NODESTRO_VAULT_KEY_FILE`. Never inside this folder (refused), so not in the repository, the `backups/` folder, the data volume, the images or a backup. `./nodestro vault-key` prints the path. |
+| Created | Once, by the launcher, on the first start of an image that supports it: 32 bytes from the operating system's cryptographic random generator (`/dev/urandom`; .NET `RandomNumberGenerator`), base64, written to a temporary file in the same folder and moved into place without replacing an existing file. The launcher never replaces it. |
+| Permissions | Linux, macOS: the file `0600` in a folder `0700`, both owned by the user; on every start the launcher refuses a link, another owner, or any access for group or others. Windows: the folder and the file have inheritance turned off and one rule, full control for the current user; the launcher refuses inherited rules and rules for anyone else. |
+| Handed over | As a read-only bind mount at `/run/secrets/nodestro-vault-key` (compose.vault-key.yaml), never as an environment variable or command line argument. Its host permissions are kept: the studio's user 10001 cannot read it. The container starts `nodestro-local boot` as root with `DAC_READ_SEARCH`, `SETUID` and `SETGID` only; it reads the file once (a regular file, no link, at most 1 KB, a valid key), drops to 10001:10001 for good (no supplementary groups, real, effective and saved ids, no capability left, root cannot be regained; all checked, or it stops) and hands the key to `nodestro-local serve` through a pipe, which the studio reads and closes before anything else runs. tini (PID 1) and the studio then run as 10001 without capabilities. Commands the launcher runs in the container (`exec`) and the health check also run as 10001. |
+| Without it | `nodestro-local serve` does not start without the handed-over key (an operator's `NODESTRO_VAULT_KEY` is not accepted) and not as root. A plain `docker compose up` without the launcher therefore does not start the studio; nothing is ever stored unencrypted. |
+| Wrong key | The data directory keeps a check value sealed with its key. A key that cannot open it (or, for data from before, none of the sealed secrets) is refused before anything is migrated or written: a new key is never laid over secrets sealed with another one. |
+| Migration | The first start of the new image seals the plain provider keys an earlier image stored, in one transaction (idempotent; nodestro-runtime N-03). MCP tokens and connection secrets were kept for the session only before, so there is nothing to migrate. |
+| Updates, rollbacks | The key file is not touched by `update`, `rollback`, `restart` or `stop`. An image from before the key file (a rollback to it) runs without compose.vault-key.yaml, on the data from before the update, as before. |
+| Rotation | `./nodestro rotate-vault-key` creates `vault.key.new`, stops the studio, seals every secret of the data volume and of the copy kept for a rollback with the new key (one transaction per volume; a secret neither key opens stops it with nothing changed; freed database pages are overwritten and the write-ahead log emptied), then moves the new file over the old one and starts again. If the second volume fails, the first is sealed back. An interrupted rotation continues with the same `vault.key.new` when run again. |
+| Loss | Keep a copy of the key file somewhere safe, apart from the backups (a password manager). If it is lost, put the copy back at the same path. Without a copy, the launcher creates a new key on the next start, the studio refuses it (wrong key), and only `./nodestro accept-new-vault-key --yes` removes the secrets the new key cannot open (they have to be entered again) and makes the new key the data's key. |
+| Backups | A backup contains the database without provider keys (they stay on this computer), but with the sealed MCP tokens and connection secrets. They open only with the key that sealed them: restored after a rotation, on another computer or after a key loss, they count as missing and have to be entered again. A restore keeps the current key's check value. |
+| Uninstall | `uninstall --delete-data` removes the key file with the data; `uninstall` keeps both. |
+
+What this protects against: copies of the data volume (also a Docker volume backup, a disk image of Docker's storage
+or a copied Docker Desktop VM disk), backups and images. What it does not protect against: the host user and anyone who
+can use Docker on the host (residual risk 4), and a compromised studio process, which holds the key in memory.
+
 ## Secrets
 
 - The repositories are public, so no build token is needed. `NODESTRO_READ` is supported only as an optional
   BuildKit secret and never becomes a layer, a build argument or a label.
 - A proxy CA bundle is passed as a BuildKit secret at build time and mounted read-only at run time. It never goes
   into the image.
-- Provider API keys belong to the running studio (encrypted in the data volume) or to its environment, never to the
-  build.
+- Provider API keys belong to the running studio (encrypted in the data volume with the key file, see above) or to its
+  environment, never to the build.
 - AWS credentials (Amazon Bedrock): none in the container by default (no `AWS_*` variables, no `~/.aws`). The user may
   add them in a `compose.override.yaml`, as variables or as a read-only mount outside the data volume (never into
   `/var/lib/nodestro`, because backups contain the whole data volume); see the README. Only the default AWS
