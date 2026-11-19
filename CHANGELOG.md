@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pins nodestro-studio ff0df34 (security fixes N-03 and N-07, `cryptography` declared in the runtime) and
+  nodestro-server 0443637 (server #94: the image's docker CLI 29.10.0, fixing Go stdlib CVE-2026-97054 of 29.9.2).
+  Local Docker has no key store, so provider keys stay as before (LD-020).
 - Pins nodestro-studio 479ae56 (studio #170..#179, CI-FAST: one lock of the internal packages, `platform/internal.txt`
   and `platform/internal-server.txt`, generated from `platform/versions.json`, with version ranges in the libraries;
   the shared upload cutoff `platform/uploaded-prior-to`; `scripts/lock_check.py`; tabrion d5821fa as its own
