@@ -113,10 +113,11 @@ file_owner() { stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1"; }
 check_vault_key() {
   local file="$1" dir mode
   dir="$(dirname "$file")"
-  [ ! -L "$file" ] && [ -f "$file" ] || fail "The key file $file is not a regular file."
+  if [ -L "$file" ] || [ ! -f "$file" ]; then fail "The key file $file is not a regular file."; fi
   [ ! -L "$dir" ] || fail "The folder of the key file ($dir) is a symbolic link."
-  [ "$(file_owner "$file")" = "$(id -u)" ] && [ "$(file_owner "$dir")" = "$(id -u)" ] \
-    || fail "The key file $file or its folder belongs to another user."
+  if [ "$(file_owner "$file")" != "$(id -u)" ] || [ "$(file_owner "$dir")" != "$(id -u)" ]; then
+    fail "The key file $file or its folder belongs to another user."
+  fi
   mode="$(file_mode "$file")"
   [ $((8#$mode & 8#077)) -eq 0 ] || fail "The key file $file can be read by others (mode $mode); fix it: chmod 600 \"$file\""
   mode="$(file_mode "$dir")"
