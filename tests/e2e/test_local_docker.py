@@ -836,8 +836,13 @@ def _files_with(text: str) -> list[str]:
         "        if needle in data: found.append(path)\n"
         "print(json.dumps(found))"
     )
-    done = compose("exec", "-T", "nodestro", "python", "-I", "-c", script, text)
-    return json.loads(done.stdout)
+    # A container of its own on the volume, as the studio's user: it also works while the studio is stopped or refuses
+    # to start.
+    done = compose(
+        "run", "--rm", "--no-deps", "-T", "--user", "10001:10001", "--entrypoint", "python", "nodestro",
+        "-I", "-c", script, text,
+    )  # fmt: skip
+    return json.loads(done.stdout.decode().strip().splitlines()[-1])
 
 
 def _processes() -> list[dict[str, Any]]:
