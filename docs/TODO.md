@@ -71,7 +71,9 @@ None known for a planned release (see the summary).
   rotation (`rotate-vault-key`) and key loss (`accept-new-vault-key --yes`) are explicit commands. Tested: launcher
   tests (bash, PowerShell 7 on Linux, the ACL on a Windows runner) and the end-to-end tests on rootful and rootless
   Docker. Not tested: the read of the mount by Docker Desktop on macOS and Windows (its file sharing), Windows
-  PowerShell 5.1 beyond `help` and `vault-key`. Internal tests do not replace the independent review (E-P-5).
+  PowerShell 5.1 beyond `help` and `vault-key`. Accepted for now (docs/SECURITY.md "The key file"): the rollback copy
+  keeps plain provider keys until the next update; a rotation does not seal the database copies from before a
+  migration again. Internal tests do not replace the independent review (E-P-5).
 - **Next step:** Add to the next bundled independent review brief; check `start`, `rotate-vault-key` and a restart
   once by hand on Docker Desktop for macOS and Windows before any release.
 
