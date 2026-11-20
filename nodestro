@@ -249,6 +249,8 @@ start() {
   require_docker
   load_state
   require_image
+  # Here, not first inside the command substitution below, which would swallow the notice of a new key file.
+  if image_has_vault_key "$NODESTRO_IMAGE"; then ensure_vault_key; fi
   local models_image
   if [ "$NODESTRO_LOCAL_MODELS" != off ]; then
     models_image="$(compose config --images 2>/dev/null | grep -m 1 '/ollama[:@]' || true)"
