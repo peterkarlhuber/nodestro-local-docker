@@ -1,5 +1,5 @@
 {
   "comment": "What Nodestro Local Docker is built from, each by full commit SHA. nodestro-studio pins every internal package by its lock (platform/internal.txt, generated from platform/versions.json); nodestro-server holds the shared image definition (image/Dockerfile, target `local`).",
-  "nodestro-studio": "ff0df34b8d030d66aba1d7d58274fccac6e81a66",
-  "nodestro-server": "0443637b70d501fb905bb0309ad5a50071c79206"
+  "nodestro-studio": "da74bcf894e4a5de66ce1683845684adfc10bade",
+  "nodestro-server": "0d281d108deadd2e4f9ece82ea86bc094d261b3a"
 }
