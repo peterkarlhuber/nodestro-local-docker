@@ -822,10 +822,10 @@ def _provider_key_stored(client: Client) -> bool:
     return bool(next(item for item in body["providers"] if item["id"] == "openai")["key_stored"])
 
 
-def _volume_contains(text: str) -> bool:
-    """Whether any file in the data volume holds ``text`` (the database, its write-ahead log, the access key ...)."""
+def _files_with(text: str) -> list[str]:
+    """The files of the data volume that hold ``text`` (the database, its write-ahead log, the access key ...)."""
     script = (
-        "import os, sys; needle = sys.argv[1].encode(); found = []\n"
+        "import json, os, sys; needle = sys.argv[1].encode(); found = []\n"
         "for top, _, names in os.walk('/var/lib/nodestro'):\n"
         "    for name in names:\n"
         "        path = os.path.join(top, name)\n"
@@ -834,9 +834,10 @@ def _volume_contains(text: str) -> bool:
         "        except OSError:\n"
         "            continue\n"
         "        if needle in data: found.append(path)\n"
-        "print(found); sys.exit(0 if found else 1)"
+        "print(json.dumps(found))"
     )
-    return compose("exec", "-T", "nodestro", "python", "-I", "-c", script, text, check=False).returncode == 0
+    done = compose("exec", "-T", "nodestro", "python", "-I", "-c", script, text)
+    return json.loads(done.stdout)
 
 
 def _processes() -> list[dict[str, Any]]:
@@ -871,7 +872,7 @@ def test_the_key_file_is_private_on_the_host_and_apart_from_the_data() -> None:
     key = _key()
     assert len(base64.b64decode(key)) == 32
     # Not in the data volume, the container's configuration, its processes' environments or command lines, or the logs.
-    assert not _volume_contains(key)
+    assert _files_with(key) == []
     assert key not in json.dumps(container("nodestro"))
     assert key not in compose("logs", "--no-color").stdout.decode()
     for process in _processes():
@@ -904,7 +905,7 @@ def test_provider_keys_are_sealed_and_survive_a_restart() -> None:
     status, body, _ = client.put("/api/settings", {"providers": {"openai": {"api_key": CANARY}}})
     assert status == 200, body
     assert _provider_key_stored(client) and CANARY not in json.dumps(body)
-    assert not _volume_contains(CANARY)
+    assert _files_with(CANARY) == []
     launcher("restart")
     assert _provider_key_stored(browser())
 
@@ -940,7 +941,7 @@ def test_without_the_launcher_s_key_file_the_studio_does_not_start() -> None:
             timeout=120,
             what="the refusal without the key",
         )
-        assert not _volume_contains(CANARY)
+        assert _files_with(CANARY) == []
     finally:
         compose("stop", "nodestro")
         launcher("start")

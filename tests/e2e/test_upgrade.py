@@ -31,9 +31,9 @@ from test_local_docker import (  # noqa: E402, F401 - `installation` is the auto
     IMAGE,
     LAUNCHER,
     VAULT_KEY,
+    _files_with,
     _names,
     _provider_key_stored,
-    _volume_contains,
     _workflow,
     browser,
     container,
@@ -49,7 +49,7 @@ def test_upgrade_from_the_previous_image_keeps_data_and_old_backups_restore(tmp_
     # A provider key, stored in plain text by an image from before the key file (LD-020).
     status, body, _ = client.put("/api/settings", {"providers": {"openai": {"api_key": CANARY}}})
     assert status == 200 and _provider_key_stored(client), body
-    assert _volume_contains(CANARY)
+    assert _files_with(CANARY)
     old_backup = tmp_path / "old.zip"
     launcher("backup", str(old_backup))
     _workflow(client, "Not in the old backup")
@@ -67,7 +67,7 @@ def test_upgrade_from_the_previous_image_keeps_data_and_old_backups_restore(tmp_
     assert "Made by the old version" in names and "Not in the old backup" in names, names
     # The new image got the launcher's new key file and sealed the plain provider key on its first start.
     assert VAULT_KEY.is_file() and _provider_key_stored(browser())
-    assert not _volume_contains(CANARY)
+    assert _files_with(CANARY) == []
     _workflow(browser(), "Made by the new version")
 
     # A backup written by the previous version, restored by the new one.
