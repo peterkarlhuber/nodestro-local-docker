@@ -1,0 +1,35 @@
+# The key file on the host (LD-020): the key that seals provider keys, MCP tokens and connection secrets.
+#
+# The launchers add this file when the image supports it (label dev.nodestro.vault-key-file="1"; an older image after a
+# rollback runs without it) and set NODESTRO_VAULT_KEY_HOST_FILE to the key file they created: outside this folder,
+# the data volume, the images and the backups, readable by the host user only (0600 in a 0700 folder; on Windows an
+# ACL with the current user only). See docs/SECURITY.md, "The key file".
+#
+# The studio's user (10001) cannot read that file, and its permissions are not loosened for it. So the studio's
+# container starts `nodestro-local boot` as root with three capabilities only (reading any file, changing its user and
+# group): it reads the read-only mount once, drops to 10001:10001 for good (no groups, no capability left, checked)
+# and hands the key to `nodestro-local serve` through a pipe, never through an environment variable or a command line.
+# The studio refuses to start without it, and refuses a key that does not fit the secrets already sealed.
+services:
+  nodestro:
+    user: "0:0"
+    entrypoint: ["nodestro-local", "boot"]
+    command: ["serve"]
+    cap_add: [DAC_READ_SEARCH, SETUID, SETGID]
+    environment:
+      NODESTRO_VAULT_KEY_FILE: /run/secrets/nodestro-vault-key
+    volumes:
+      - type: bind
+        source: ${NODESTRO_VAULT_KEY_HOST_FILE:?the launcher names the key file (./nodestro start)}
+        target: /run/secrets/nodestro-vault-key
+        read_only: true
+        bind:
+          create_host_path: false
+    # The health check runs as the container's user (root here): it drops to the studio's user before it asks.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -I
+        - -c
+        - "import os, urllib.request; os.setgroups([]); os.setresgid(10001, 10001, 10001); os.setresuid(10001, 10001, 10001); urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4)"

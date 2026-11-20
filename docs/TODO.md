@@ -59,18 +59,23 @@ None known for a planned release (see the summary).
 - **Next step:** Decide whether air-gapped installs need a network boundary again (internal-only Ollama behind an
   authenticating proxy).
 
-### LD-020 · No key store: provider keys stay in plain text in the data volume
+### LD-020 · Key file on the host: independent review and real Docker Desktop checks
 
-- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** nodestro-runtime RT-081 (security fix N-03, #191,
-  #192), nodestro-studio ST-066 and MUP-ONA AR-3, owner decisions E-P-5 and E-P-6 (2026-11-19)
-- **What:** Since N-03 the runtime seals provider API keys with a key store when it has one (the desktop's keychain or
-  `NODESTRO_VAULT_KEY`). Local Docker passes no `NODESTRO_VAULT_KEY`, so provider keys stay as before: plain text in
-  the database of the data volume (readable by whoever can read the volume or the host user's Docker), and MCP tokens
-  and connection secrets are kept for the session only. The image has `cryptography` (a declared runtime dependency
-  since #192), so only the key's custody is missing.
-- **Next step:** Decide where a Local Docker key would live (a launcher-generated file outside the data volume, the
-  host's keychain through the launchers, or an operator variable) and how it reaches the container without the
-  environment of other processes. The independent review of N-03 stays open (internal tests do not replace it).
+- **Priority:** P3 Low · **Status:** Needs external review · **Refs:** owner decision LD-020 (2026-11-19),
+  compose.vault-key.yaml, both launchers, docs/SECURITY.md "The key file", nodestro-runtime RT-082
+  (`local_vault`), nodestro-api API-070 (`nodestro-local boot`), RT-081 (N-03), nodestro-studio ST-066
+- **What:** Implemented: the launchers create the key file outside this folder, the data volume, the images and the
+  backups (0600 in 0700, Windows ACL with the current user only), mount it read-only, and `nodestro-local boot` reads
+  it as root with three capabilities and hands it to the studio through a pipe after dropping to 10001. The studio
+  refuses to start without it and refuses a key that does not fit; plain provider keys are sealed on the first start;
+  rotation (`rotate-vault-key`) and key loss (`accept-new-vault-key --yes`) are explicit commands. Tested: launcher
+  tests (bash, PowerShell 7 on Linux, the ACL on a Windows runner) and the end-to-end tests on rootful and rootless
+  Docker. Not tested: the read of the mount by Docker Desktop on macOS and Windows (its file sharing), Windows
+  PowerShell 5.1 beyond `help` and `vault-key`. Accepted for now (docs/SECURITY.md "The key file"): the rollback copy
+  keeps plain provider keys until the next update; a rotation does not seal the database copies from before a
+  migration again. Internal tests do not replace the independent review (E-P-5).
+- **Next step:** Add to the next bundled independent review brief; check `start`, `rotate-vault-key` and a restart
+  once by hand on Docker Desktop for macOS and Windows before any release.
 
 ## Bugs and reliability
 

@@ -25,6 +25,7 @@
         "tests/e2e/test_upgrade.py",
         "scripts/build-image.sh",
         "compose.yaml",
+        "compose.vault-key.yaml",
         "nodestro",
         ".github/workflows/upgrade.yml"
       ]

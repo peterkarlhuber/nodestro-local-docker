@@ -9,12 +9,14 @@ Behind a TLS-inspecting proxy, set NODESTRO_EXTRA_CA_FILE to its certificate bun
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable, Iterator
 import json
 import os
 from pathlib import Path
 import re
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -69,6 +71,8 @@ def _free_port() -> int:
 
 PORT = _free_port()
 STATE = Path(tempfile.mkdtemp(prefix="nodestro-e2e-state-"))
+#: The key file for the secrets (LD-020): outside this folder, in a private folder of its own (mkdtemp: 0700).
+VAULT_KEY = Path(tempfile.mkdtemp(prefix="nodestro-e2e-keys-")) / "keys" / "vault.key"
 (STATE / "state.env").write_text(f"NODESTRO_IMAGE={IMAGE}\n")
 ENV = {
     **os.environ,
@@ -77,6 +81,9 @@ ENV = {
     "NODESTRO_IMAGE": IMAGE,
     "NODESTRO_NO_BROWSER": "1",
     "NODESTRO_STATE_DIR": str(STATE),
+    "NODESTRO_VAULT_KEY_FILE": str(VAULT_KEY),
+    # For this file's own compose calls (the launcher sets it itself).
+    "NODESTRO_VAULT_KEY_HOST_FILE": str(VAULT_KEY),
 }
 # Rootless Docker: the launcher finds the user's socket itself; the tests' own compose calls need it named.
 _HOST = os.environ.get("DOCKER_HOST", "")
@@ -89,11 +96,21 @@ LAUNCHER = (
     else [str(ROOT / "nodestro")]
 )
 FILES = ["-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "tests" / "compose.test.yaml")]
+_LABEL = subprocess.run(
+    ["docker", "image", "inspect", "--format", '{{ index .Config.Labels "dev.nodestro.vault-key-file" }}', IMAGE],
+    capture_output=True, text=True, check=False,
+).stdout.strip()  # fmt: skip
+#: Whether the image reads the key file (LD-020); the upgrade test starts with an image from before.
+KEY_FILE = _LABEL == "1"
+if KEY_FILE:
+    FILES += ["-f", str(ROOT / "compose.vault-key.yaml")]
 if os.environ.get("NODESTRO_EXTRA_CA_FILE"):
     FILES += ["-f", str(ROOT / "compose.extra-ca.yaml")]
 
 
 def compose(*args: str, check: bool = True, input: bytes | None = None, timeout: float = 600) -> Any:
+    if args[:1] == ("exec",):  # as the launchers do: the container's own user is root with the key file (LD-020)
+        args = ("exec", "--user", "10001:10001", *args[1:])
     return subprocess.run(
         ["docker", "compose", "--project-directory", str(ROOT), *FILES, *args],
         env=ENV,
@@ -438,7 +455,12 @@ def test_the_containers_are_locked_down() -> None:
     for service in ("network", "nodestro", "gateway"):
         host = container(service)["HostConfig"]
         assert host["ReadonlyRootfs"] is True, service
-        assert host["CapDrop"] == ["ALL"] and not host["CapAdd"], service
+        added = sorted(name.removeprefix("CAP_") for name in host["CapAdd"] or [])
+        assert host["CapDrop"] == ["ALL"], service
+        if service == "nodestro" and KEY_FILE:  # only for `nodestro-local boot`, which drops them (key file tests)
+            assert added == ["DAC_READ_SEARCH", "SETGID", "SETUID"], added
+        else:
+            assert not added, service
         assert "no-new-privileges:true" in host["SecurityOpt"], service
         assert host["Privileged"] is False, service
     gateway = container("gateway")
@@ -447,7 +469,7 @@ def test_the_containers_are_locked_down() -> None:
     studio_mounts = {mount["Destination"] for mount in container("nodestro")["Mounts"]}
     assert "/var/run/docker.sock" not in studio_mounts and "/run/nodestro-sandbox" in studio_mounts
     assert "/var/run/docker.sock" in {mount["Destination"] for mount in gateway["Mounts"]}
-    assert container("nodestro")["Config"]["User"] == "10001:10001"
+    assert container("nodestro")["Config"]["User"] == ("0:0" if KEY_FILE else "10001:10001")
     holder = container("network")
     assert holder["Config"]["User"] == "65534:65534" and holder["Config"]["Entrypoint"] == ["sleep", "infinity"]
     assert holder["Mounts"] == [] and holder["HostConfig"]["Memory"] > 0
@@ -789,6 +811,177 @@ def test_backup_and_restore_through_the_launcher(tmp_path: Path) -> None:
     assert "In the backup" in names and "After the backup" not in names
 
 
+# ---- the key file for the secrets (LD-020) -------------------------------------------------------------------------
+
+CANARY = "sk-e2e-canary-" + "0123456789abcdef" * 2
+
+
+def _provider_key_stored(client: Client) -> bool:
+    status, body, _ = client.get("/api/settings")
+    assert status == 200, body
+    return bool(next(item for item in body["providers"] if item["id"] == "openai")["key_stored"])
+
+
+def _files_with(text: str) -> list[str]:
+    """The files of the data volume that hold ``text`` (the database, its write-ahead log, the access key ...)."""
+    script = (
+        "import json, os, sys; needle = sys.argv[1].encode(); found = []\n"
+        "for top, _, names in os.walk('/var/lib/nodestro'):\n"
+        "    for name in names:\n"
+        "        path = os.path.join(top, name)\n"
+        "        try:\n"
+        "            data = open(path, 'rb').read()\n"
+        "        except OSError:\n"
+        "            continue\n"
+        "        if needle in data: found.append(path)\n"
+        "print(json.dumps(found))"
+    )
+    # A container of its own on the volume, as the studio's user: it also works while the studio is stopped or refuses
+    # to start.
+    done = compose(
+        "run", "--rm", "--no-deps", "-T", "--user", "10001:10001", "--entrypoint", "python", "nodestro",
+        "-I", "-c", script, text,
+    )  # fmt: skip
+    return json.loads(done.stdout.decode().strip().splitlines()[-1])
+
+
+def _processes() -> list[dict[str, Any]]:
+    """The studio container's processes: command line, ids and capabilities (read as the studio's user)."""
+    script = (
+        "import json, os\nfound = []\n"
+        "for pid in filter(str.isdigit, os.listdir('/proc')):\n"
+        "    try:\n"
+        "        status = dict(l.split(':', 1) for l in open(f'/proc/{pid}/status').read().splitlines() if ':' in l)\n"
+        "        cmd = open(f'/proc/{pid}/cmdline', 'rb').read().split(b'\\0')\n"
+        "        env = open(f'/proc/{pid}/environ', 'rb').read().decode('latin-1')\n"
+        "    except OSError:\n"
+        "        continue\n"
+        "    found.append({'pid': int(pid), 'cmd': [c.decode() for c in cmd if c], 'environ': env,\n"
+        "                  'uid': status['Uid'].split(), 'gid': status['Gid'].split(),\n"
+        "                  'groups': status['Groups'].split(),\n"
+        "                  'caps': {n: int(status[n], 16) for n in ('CapInh', 'CapPrm', 'CapEff', 'CapAmb')}})\n"
+        "print(json.dumps(found))"
+    )
+    return list(json.loads(compose("exec", "-T", "nodestro", "python", "-I", "-c", script).stdout))
+
+
+def _key() -> str:
+    return VAULT_KEY.read_text().strip()
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_the_key_file_is_private_on_the_host_and_apart_from_the_data() -> None:
+    assert VAULT_KEY.is_file() and ROOT not in VAULT_KEY.parents
+    assert stat.S_IMODE(VAULT_KEY.stat().st_mode) == 0o600 and VAULT_KEY.stat().st_uid == os.getuid()
+    assert stat.S_IMODE(VAULT_KEY.parent.stat().st_mode) == 0o700
+    key = _key()
+    assert len(base64.b64decode(key)) == 32
+    # Not in the data volume, the container's configuration, its processes' environments or command lines, or the logs.
+    assert _files_with(key) == []
+    assert key not in json.dumps(container("nodestro"))
+    assert key not in compose("logs", "--no-color").stdout.decode()
+    for process in _processes():
+        assert key not in process["environ"] and key not in " ".join(process["cmd"]), process["cmd"]
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_the_studio_runs_without_root_and_cannot_read_the_key_file_itself() -> None:
+    # The mount is read-only and its host permissions are kept: the studio's user cannot open it ...
+    mount = next(m for m in container("nodestro")["Mounts"] if m["Destination"] == "/run/secrets/nodestro-vault-key")
+    assert mount["RW"] is False and mount["Source"] == str(VAULT_KEY)
+    refused = compose("exec", "-T", "nodestro", "cat", "/run/secrets/nodestro-vault-key", check=False)
+    assert refused.returncode != 0 and b"Permission denied" in refused.stderr
+    # ... and every process of the container is the studio's user, without groups or capabilities: `boot` dropped
+    # root before the studio started, and tini (PID 1) and the studio run as 10001.
+    processes = {process["pid"]: process for process in _processes()}
+    assert processes[1]["cmd"][0].endswith("tini")
+    serving = [p for p in processes.values() if "serve" in p["cmd"] and "--secrets-fd" in p["cmd"]]
+    assert serving, [p["cmd"] for p in processes.values()]
+    for process in processes.values():
+        if process["cmd"][:1] == ["python"] and "-c" in process["cmd"]:
+            continue  # this test's own probe (exec)
+        assert process["uid"] == ["10001"] * 4 and process["gid"] == ["10001"] * 4, process["cmd"]
+        assert process["groups"] == [] and set(process["caps"].values()) == {0}, process
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_provider_keys_are_sealed_and_survive_a_restart() -> None:
+    client = browser()
+    status, body, _ = client.put("/api/settings", {"providers": {"openai": {"api_key": CANARY}}})
+    assert status == 200, body
+    assert _provider_key_stored(client) and CANARY not in json.dumps(body)
+    assert _files_with(CANARY) == []
+    launcher("restart")
+    assert _provider_key_stored(browser())
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_a_different_key_file_is_refused_and_the_right_one_works_again() -> None:
+    right = VAULT_KEY.read_bytes()
+    launcher("stop")
+    VAULT_KEY.write_text(base64.b64encode(os.urandom(32)).decode() + "\n")
+    try:
+        refused = launcher("start", check=False, timeout=600)
+        assert refused.returncode != 0
+        assert "does not fit" in compose("logs", "--no-color", "nodestro").stdout.decode()
+    finally:
+        VAULT_KEY.write_bytes(right)
+    compose("stop", "nodestro")
+    launcher("start")
+    assert _provider_key_stored(browser())
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_without_the_launcher_s_key_file_the_studio_does_not_start() -> None:
+    # Plain `docker compose up` without compose.vault-key.yaml: the image's own user and entrypoint, no key.
+    plain = ["-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "tests" / "compose.test.yaml")]
+    compose("stop", "nodestro")
+    try:
+        subprocess.run(
+            ["docker", "compose", "--project-directory", str(ROOT), *plain, "up", "-d", "--no-deps", "nodestro"],
+            env=ENV, capture_output=True, check=True, timeout=300,
+        )  # fmt: skip
+        wait_for(
+            lambda: "key file on the host" in compose("logs", "--no-color", "nodestro").stdout.decode(),
+            timeout=120,
+            what="the refusal without the key",
+        )
+        assert _files_with(CANARY) == []
+    finally:
+        compose("stop", "nodestro")
+        launcher("start")
+    assert _provider_key_stored(browser())
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_a_rotation_keeps_every_secret_and_replaces_the_key_file() -> None:
+    before = _key()
+    result = launcher("rotate-vault-key")
+    assert "sealed with the new key" in result.stdout, result.stdout + result.stderr
+    after = _key()
+    assert after != before and not VAULT_KEY.with_name("vault.key.new").exists()
+    assert stat.S_IMODE(VAULT_KEY.stat().st_mode) == 0o600
+    assert _provider_key_stored(browser())
+    launcher("restart")
+    assert _provider_key_stored(browser())
+
+
+@pytest.mark.skipif(not KEY_FILE, reason="the image has no key file support")
+def test_a_lost_key_file_is_replaced_only_on_request() -> None:
+    launcher("stop")
+    VAULT_KEY.unlink()  # lost
+    started = launcher("start", check=False, timeout=600)
+    assert started.returncode != 0 and "Created the key file" in started.stdout + started.stderr
+    assert "accept-new-vault-key" in started.stdout + started.stderr
+    unconfirmed = launcher("accept-new-vault-key", check=False)
+    assert unconfirmed.returncode != 0 and "--yes" in unconfirmed.stdout + unconfirmed.stderr
+    launcher("accept-new-vault-key", "--yes")
+    client = browser()
+    assert not _provider_key_stored(client)  # removed: it has to be entered again
+    status, body, _ = client.put("/api/settings", {"providers": {"openai": {"api_key": CANARY}}})
+    assert status == 200 and _provider_key_stored(client), body
+
+
 def test_update_and_rollback_keep_the_data() -> None:
     _workflow(browser(), "Before the update")
     # The update path with a prepared image (NODESTRO_UPDATE_IMAGE): a second tag of the same image.
@@ -805,9 +998,13 @@ def test_update_and_rollback_keep_the_data() -> None:
         assert container("nodestro")["Config"]["Image"] == "nodestro-local:e2e-next"
         assert list((ROOT / "backups").glob("before-update-*.zip")), "the update makes a backup first"
         _workflow(browser(), "After the update")
+        if KEY_FILE:  # the key file stays as it is, and the secrets stay readable
+            assert _provider_key_stored(browser())
         launcher("rollback")
         names = _names(browser())
         assert "Before the update" in names and "After the update" not in names
         assert container("nodestro")["Config"]["Image"] == IMAGE
+        if KEY_FILE:
+            assert _provider_key_stored(browser())
     finally:
         docker("rmi", "nodestro-local:e2e-next", check=False)
