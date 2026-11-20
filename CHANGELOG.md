@@ -15,9 +15,10 @@
     key file too. The studio refuses a missing or non-fitting key; plain provider keys are sealed on the first start.
   - Tests: launcher tests (tests/launcher/test_vault_key.py), end-to-end key file tests, the upgrade test checks the
     migration and the rollback. LD-020 now tracks the independent review.
-- Pins nodestro-studio 16baf34 (studio #209 and #210: runtime #193 and #194, api #153, LD-020; a plain provider key
-  leaves the database's write-ahead log as soon as it is sealed) and nodestro-server 4fb3572 (server #95 and #96: the
-  image's label `dev.nodestro.vault-key-file`).
+- Pins nodestro-studio 3365344 (studio #209 to #211: runtime #193 to #195, api #153, LD-020; once a plain provider
+  key is sealed, no plain copy stays in the volume: not in the write-ahead log, free pages or the database copies from
+  before a migration) and nodestro-server 4ee4b6b (server #95 to #97: the image's label
+  `dev.nodestro.vault-key-file`).
 - Pins nodestro-studio ff0df34 (security fixes N-03 and N-07, `cryptography` declared in the runtime) and
   nodestro-server 0443637 (server #94: the image's docker CLI 29.10.0, fixing Go stdlib CVE-2026-97054 of 29.9.2).
   Until LD-020 (above), Local Docker had no key store.
